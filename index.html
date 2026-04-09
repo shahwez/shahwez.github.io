@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Sudoku Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Pi Sudoku</h1>
+        
+        <div id="stats-container">
+            Mistakes: <span id="mistake-count">0</span>/3
+        </div>
+
+        <div id="grid"></div>
+
+        <div class="numpad">
+            <button onclick="inputValue(1)">1</button>
+            <button onclick="inputValue(2)">2</button>
+            <button onclick="inputValue(3)">3</button><br>
+            <button onclick="inputValue(4)">4</button>
+            <button onclick="inputValue(5)">5</button>
+            <button onclick="inputValue(6)">6</button><br>
+            <button onclick="inputValue(7)">7</button>
+            <button onclick="inputValue(8)">8</button>
+            <button onclick="inputValue(9)">9</button>
+        </div>
+
+        <div class="controls">
+            <button onclick="location.reload()">New Game</button>
+        </div>
+
+        <div id="monetize-section">
+            <p>Stuck? Get a hint for 0.1 Pi!</p>
+            <button onclick="buyHint()">Get Hint (0.1 Pi)</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

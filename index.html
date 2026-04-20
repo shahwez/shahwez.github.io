@@ -3,113 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent</title>
+    <title>Ascent of the Pyramid</title>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <script src="https://minepi.com"></script>
     <style>
-        body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
-        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100%; max-width: 400px; height: auto; }
-        #overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .btn { background: #d4af37; color: #000; padding: 20px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; }
-        #status { position: absolute; bottom: 20px; font-size: 12px; opacity: 0.5; }
+        body { margin: 0; background: #0a0500; color: #d4af37; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
+        canvas { background: radial-gradient(circle at top, #1a120b 0%, #000 100%); border: 4px double #d4af37; border-radius: 10px; box-shadow: 0 0 50px rgba(212, 175, 55, 0.4); }
+        #ui { position: absolute; top: 20px; width: 380px; display: flex; justify-content: space-between; font-size: 18px; pointer-events: none; text-shadow: 2px 2px #000; z-index: 10; }
+        #overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .gold-btn { background: #d4af37; color: #000; padding: 15px 35px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 16px; margin: 10px; }
+        #debug-info { position: absolute; bottom: 10px; font-size: 10px; color: #444; }
     </style>
 </head>
 <body>
-    <div id="status">Status: Initializing...</div>
-    <div id="overlay">
-        <h1 style="color:#d4af37; letter-spacing:3px;">PYRAMID ASCENT</h1>
-        <p id="msg" style="color:#fff; margin-bottom:30px;">Tap to Start Ascent</p>
-        <button class="btn" onclick="forceStart()">START GAME</button>
+    <div id="ui">
+        <div>ALTITUDE: <span id="heightText">0</span>m</div>
+        <div>BEST: <span id="highScoreText">0</span>m</div>
     </div>
-
+    <div id="overlay">
+        <h1 style="color: #d4af37; letter-spacing: 5px;">ASCENT OF THE PYRAMID</h1>
+        <p id="status-text" style="color: #fff; margin-bottom: 25px;">Ready to Climb?</p>
+        <button id="start-btn" class="gold-btn" onclick="startGame()">START ASCENT</button>
+        <button id="pi-btn" class="gold-btn" style="background:#555; color:#fff;" onclick="initPi()">CONNECT PI</button>
+        <button id="revive-btn" class="gold-btn" style="display:none; background:#ff4444; color:#fff;" onclick="payToRevive()">REVIVE (0.01 PI)</button>
+    </div>
+    <div id="debug-info">V1.0.4 - Waiting for interaction</div>
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
+        // --- 1. SET YOUR APP ID HERE ---
+        const MY_APP_ID = "YOUR_APP_ID_FROM_PORTAL";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDeaQF-003Hu6EAK4S0hEQyBs77en-YTIU",
+            authDomain: "://firebaseapp.com",
+            projectId: "pi-ramid-ascent",
+            storageBucket: "pi-ramid-ascent.firebasestorage.app",
+            appId: "1:889789419959:web:7ff463fca36c02032e9832"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const Pi = window.Pi;
+        let currentUser = null;
+
+        async function initPi() {
+            try {
+                Pi.init({ version: "1.5", sandbox: true });
+                const auth = await Pi.authenticate(['username', 'payments'], (p) => {});
+                currentUser = auth.user;
+                document.getElementById('status-text').innerText = "Welcome, " + currentUser.username;
+                document.getElementById('pi-btn').style.display = "none";
+                document.getElementById('debug-info').innerText = "Pi Connected: " + currentUser.username;
+            } catch (err) {
+                document.getElementById('status-text').innerText = "Guest Mode - Open in Pi Browser";
+            }
+        }
+
+        async function payToRevive() {
+            if (!currentUser) return alert("Pi Browser Required!");
+            try {
+                await Pi.createPayment({ amount: 0.01, memo: "Revive", metadata: { type: "revive" }}, {
+                    onReadyForServerCompletion: (id, txid) => {
+                        gameOver = false; document.getElementById('overlay').style.display = 'none';
+                        player.y = cameraY + 350; player.vy = -15; audio.play();
+                    },
+                    onError: (err) => alert("Payment Failed")
+                });
+            } catch (e) { console.error(e); }
+        }
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
-        const status = document.getElementById('status');
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, gameOver = true, musicStarted = false;
-        const player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
-        let platforms = [], cameraY = 0;
+        let height = 0, highScore = localStorage.getItem('ascent_pyramid_vFinal') || 0, gameOver = true;
+        const player = { x: 200, y: 500, r: 13, vy: 0, vx: 0 };
+        let platforms = [], cameraY = 0, musicStarted = false;
+        document.getElementById('highScoreText').innerText = highScore;
 
-        // --- FIX: Force Game to Run ---
-        function forceStart() {
+        function startGame() {
+            if (!musicStarted) { audio.play().catch(e => {}); musicStarted = true; }
             document.getElementById('overlay').style.display = 'none';
-            if (!musicStarted) {
-                audio.play().then(() => { musicStarted = true; }).catch(e => status.innerText = "Audio Blocked");
+            resetLevel();
+        }
+
+        function resetLevel() {
+            platforms = []; cameraY = 0; player.x = 200; player.y = 500; player.vy = 0; player.vx = 0;
+            gameOver = false; height = 0;
+            document.getElementById('revive-btn').style.display = 'none';
+            platforms.push({ x: 0, y: 580, w: 400, h: 25 });
+            for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 300, y: 580 - i * 135, w: 100, h: 18 });
+        }
+
+        // Mouse & Touch Movement
+        function moveHandler(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            if (clientX) {
+                const mouseX = (clientX - rect.left) * (400 / rect.width);
+                player.vx = (mouseX - player.x) * 0.2;
             }
-            gameOver = false;
-            initLevel();
         }
-
-        function initLevel() {
-            platforms = []; cameraY = 0; player.x = 200; player.y = 500; player.vy = 0;
-            platforms.push({ x: 0, y: 580, w: 400, h: 20 });
-            for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 300, y: 580 - i * 130, w: 100, h: 15 });
-        }
-
-        // Horizontal control (Mobile Touch)
-        window.addEventListener('touchmove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const touchX = e.touches[0].clientX - rect.left;
-            player.vx = (touchX - (player.x * (rect.width/400))) * 0.1;
-        });
-
-        // Horizontal control (Mouse)
-        window.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            player.vx = (mouseX - (player.x * (rect.width/400))) * 0.1;
-        });
+        window.addEventListener('mousemove', moveHandler);
+        window.addEventListener('touchmove', moveHandler);
 
         function update() {
             if (gameOver) return;
-            player.x += player.vx; player.vy += 0.5; player.y += player.vy;
+            player.x += player.vx; player.vy += 0.45; player.y += player.vy;
             if (player.x < 0) player.x = 400; if (player.x > 400) player.x = 0;
 
             platforms.forEach(p => {
-                if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 10 && player.x > p.x && player.x < p.x + p.w) {
-                    player.y = p.y - player.r; player.vy = -14;
+                if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 10 && player.x > p.x - 10 && player.x < p.x + p.w + 10) {
+                    player.y = p.y - player.r; player.vy = -14.5;
                     let h = Math.floor((580 - p.y) / 10);
-                    if (h > height) height = h;
+                    if (h > height) {
+                        height = h;
+                        document.getElementById('heightText').innerText = height;
+                        if (height > highScore) { 
+                            highScore = height; 
+                            localStorage.setItem('ascent_pyramid_vFinal', highScore); 
+                            document.getElementById('highScoreText').innerText = highScore;
+                        }
+                    }
                 }
             });
 
-            if (player.y < cameraY + 250) cameraY = player.y - 250;
-            if (platforms[platforms.length - 1].y > cameraY - 100) {
-                platforms.push({ x: Math.random() * 300, y: platforms[platforms.length - 1].y - 130, w: 100, h: 15 });
-            }
-            if (player.y > cameraY + 650) {
-                gameOver = true;
-                document.getElementById('overlay').style.display = 'flex';
-                document.getElementById('msg').innerText = "SCORE: " + height + "m";
+            if (player.y < cameraY + 280) cameraY = player.y - 280;
+            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 320, y: platforms[platforms.length - 1].y - 135, w: Math.max(60, 100 - (height / 10)), h: 18 });
+            if (player.y > cameraY + 680) { 
+                gameOver = true; 
+                audio.pause(); 
+                document.getElementById('overlay').style.display = 'flex'; 
+                document.getElementById('status-text').innerText = "ALTITUDE REACHED: " + height + "m"; 
+                document.getElementById('revive-btn').style.display = 'block'; 
+                document.getElementById('start-btn').innerText = "RETRY";
             }
         }
 
         function draw() {
             ctx.clearRect(0, 0, 400, 600);
             ctx.save(); ctx.translate(0, -cameraY);
-            ctx.fillStyle = '#d4af37'; 
-            platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
+            platforms.forEach(p => { ctx.fillStyle = '#d4af37'; ctx.fillRect(p.x, p.y, p.w, p.h); });
+            ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
             update(); requestAnimationFrame(draw);
         }
-
-        // Initialize Pi in background
-        try {
-            Pi.init({ version: "1.5", sandbox: true });
-            Pi.authenticate(['username'], (p) => {}).then(auth => {
-                status.innerText = "Welcome, " + auth.user.username;
-            });
-        } catch(e) { status.innerText = "Pi Network Offline"; }
-
         draw();
     </script>
 </body>

@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ascend Pi-Ramid</title>
-    <!-- Use specific CDN for Pi SDK reliability -->
+    <!-- Use the most stable Pi SDK Link -->
     <script src="https://minepi.com"></script>
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; max-width: 400px; height: 100vh; max-height: 600px; display: block; }
         #ui { position: absolute; top: 10px; width: 90%; max-width: 380px; display: flex; justify-content: space-between; font-size: 18px; pointer-events: none; z-index: 10; font-weight: bold; }
-        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .gold-btn { background: #d4af37; color: #000; padding: 15px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; margin: 10px; }
-        #status-msg { position: absolute; bottom: 20px; font-size: 10px; color: #d4af37; opacity: 0.7; }
+        #status-msg { position: absolute; bottom: 20px; font-size: 11px; color: #d4af37; width: 80%; text-align: center; }
     </style>
 </head>
 <body>
@@ -24,26 +24,23 @@
 
     <div id="overlay">
         <h1 style="color: #d4af37; letter-spacing: 2px;">ASCEND PI-RAMID</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Safe Climbing Initialized</p>
+        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Synchronizing with Pi...</p>
         <button class="gold-btn" onclick="startGame()">START ASCENT</button>
-        <button id="pi-btn" class="gold-btn" style="background:#444; color:#fff; font-size: 14px;" onclick="initPi()">CONNECT PI</button>
+        <button id="pi-btn" class="gold-btn" style="background:#444; color:#fff; font-size: 14px; display:none;" onclick="initPi()">RETRY CONNECTION</button>
     </div>
 
-    <div id="status-msg">SDK Ready</div>
+    <div id="status-msg">Waiting for Pi Browser Handshake...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
-
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
-        
-        canvas.width = 400;
-        canvas.height = 600;
+        canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('ascend_pi_v9') || 0;
+        let height = 0, highScore = localStorage.getItem('ascend_pi_v10') || 0;
         let gameOver = true;
         const player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
@@ -54,9 +51,7 @@
             platforms = []; cameraY = 0; height = 0;
             player.x = 200; player.y = 500; player.vy = 0; player.vx = 0;
             platforms.push({ x: 0, y: 580, w: 400, h: 20 });
-            for (let i = 1; i < 10; i++) {
-                platforms.push({ x: Math.random() * 300, y: 580 - i * 135, w: 100, h: 15 });
-            }
+            for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 300, y: 580 - i * 135, w: 100, h: 15 });
         }
 
         function startGame() {
@@ -66,43 +61,30 @@
             gameOver = false;
         }
 
-        // --- FIXED MOVEMENT LOGIC ---
         function handleInput(inputX) {
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
             const mouseX = (inputX - rect.left) * scale;
-            // Smoother lerp to prevent horizontal "running away"
-            const targetVx = (mouseX - player.x) * 0.15;
-            player.vx = Math.max(-8, Math.min(8, targetVx)); 
+            const targetVx = (mouseX - player.x) * 0.18;
+            player.vx = Math.max(-10, Math.min(10, targetVx)); 
         }
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
         window.addEventListener('touchmove', (e) => { 
             if(!gameOver) {
                 handleInput(e.touches[0].clientX);
-                e.preventDefault(); // Stop screen scrolling
+                e.preventDefault();
             }
         }, { passive: false });
 
         function update() {
             if (gameOver) return;
-
-            player.x += player.vx;
-            player.vy += 0.45;
-            player.y += player.vy;
-
-            // Simple boundary
-            if (player.x < 10) player.x = 10;
-            if (player.x > 390) player.x = 390;
+            player.x += player.vx; player.vy += 0.45; player.y += player.vy;
+            if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
             platforms.forEach(p => {
-                if (player.vy > 0 && 
-                    player.y + player.r > p.y && 
-                    player.y + player.r < p.y + p.h + 12 && 
-                    player.x > p.x - 5 && player.x < p.x + p.w + 5) {
-                    player.y = p.y - player.r;
-                    player.vy = -14.5;
-                    
+                if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
+                    player.y = p.y - player.r; player.vy = -14.5;
                     let h = Math.floor((580 - p.y) / 10);
                     if (h > height) {
                         height = h;
@@ -112,7 +94,6 @@
             });
 
             if (player.y < cameraY + 250) cameraY = player.y - 250;
-            
             if (platforms[platforms.length - 1].y > cameraY - 100) {
                 platforms.push({ x: Math.random() * 300, y: platforms[platforms.length - 1].y - 135, w: Math.max(60, 110 - (height/8)), h: 15 });
             }
@@ -121,53 +102,61 @@
                 gameOver = true;
                 if (height > highScore) {
                     highScore = height;
-                    localStorage.setItem('ascend_pi_v9', highScore);
+                    localStorage.setItem('ascend_pi_v10', highScore);
                     document.getElementById('highScoreText').innerText = highScore;
                 }
                 document.getElementById('overlay').style.display = 'flex';
-                document.getElementById('info-text').innerText = "ASCENT ENDED: " + height + "m";
+                document.getElementById('info-text').innerText = "SCORE: " + height + "m";
             }
         }
 
         function draw() {
             ctx.clearRect(0, 0, 400, 600);
-            ctx.save();
-            ctx.translate(0, -cameraY);
-
+            ctx.save(); ctx.translate(0, -cameraY);
             ctx.fillStyle = '#d4af37';
             platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-
             ctx.fillStyle = '#fff';
-            ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
             ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-
             ctx.restore();
             update();
             requestAnimationFrame(draw);
         }
 
-        // --- PI LOGIC WITH ERROR BYPASS ---
-        let piInitialized = false;
+        // --- THE NUCLEAR PI FIX ---
         async function initPi() {
             const status = document.getElementById('status-msg');
-            status.innerText = "Attempting Handshake...";
+            const info = document.getElementById('info-text');
+            status.innerText = "Connecting to Pi Network...";
+
             try {
-                if (!piInitialized) {
-                    await window.Pi.init({ version: "1.5", sandbox: true });
-                    piInitialized = true;
-                }
+                // FORCE Sandbox to false if you are in the real Pi Browser
+                // Many users report this fixes the connection loop
+                await window.Pi.init({ version: "1.5", sandbox: false });
+                
                 const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {});
-                document.getElementById('info-text').innerText = "Pioneer: " + auth.user.username;
+                
+                info.innerText = "Welcome Pioneer, " + auth.user.username;
+                status.innerText = "Connected as: " + auth.user.username;
                 document.getElementById('pi-btn').style.display = "none";
-                status.innerText = "Pi Linked Successfully";
             } catch (err) {
                 console.error(err);
-                alert("URL Mismatch! Check if your portal URL has a '/' at the end and your browser link doesn't (or vice-versa).");
-                status.innerText = "Check App Configuration";
+                status.innerText = "Handshake failed. Retrying in Sandbox mode...";
+                // Fallback attempt
+                try {
+                    await window.Pi.init({ version: "1.5", sandbox: true });
+                    const auth = await window.Pi.authenticate(['username'], (p) => {});
+                    info.innerText = "Connected (Sandbox): " + auth.user.username;
+                    status.innerText = "Sandbox Auth Active";
+                } catch (e2) {
+                    status.innerText = "Pi Offline. Using Local Play.";
+                    info.innerText = "Ready to Climb?";
+                    document.getElementById('pi-btn').style.display = "block";
+                }
             }
         }
 
+        // Start checking 1.5 seconds after page loads to give Browser time to inject SDK
+        setTimeout(initPi, 1500);
         draw();
     </script>
 </body>

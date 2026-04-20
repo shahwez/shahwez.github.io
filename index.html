@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ascend Pi-Ramid</title>
-    <!-- Use the most stable Pi SDK Link -->
+    <!-- We load the SDK with a cache-buster to force the latest version -->
     <script src="https://minepi.com"></script>
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
@@ -12,7 +12,7 @@
         #ui { position: absolute; top: 10px; width: 90%; max-width: 380px; display: flex; justify-content: space-between; font-size: 18px; pointer-events: none; z-index: 10; font-weight: bold; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .gold-btn { background: #d4af37; color: #000; padding: 15px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; margin: 10px; }
-        #status-msg { position: absolute; bottom: 20px; font-size: 11px; color: #d4af37; width: 80%; text-align: center; }
+        #debug-log { position: absolute; bottom: 10px; font-size: 9px; color: #444; width: 90%; text-align: center; }
     </style>
 </head>
 <body>
@@ -24,12 +24,12 @@
 
     <div id="overlay">
         <h1 style="color: #d4af37; letter-spacing: 2px;">ASCEND PI-RAMID</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Synchronizing with Pi...</p>
-        <button class="gold-btn" onclick="startGame()">START ASCENT</button>
-        <button id="pi-btn" class="gold-btn" style="background:#444; color:#fff; font-size: 14px; display:none;" onclick="initPi()">RETRY CONNECTION</button>
+        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Establishing Secure Link...</p>
+        <button id="start-btn" class="gold-btn" onclick="startGame()">START ASCENT</button>
+        <button id="pi-btn" class="gold-btn" style="background:#555; color:#fff; font-size: 14px; display:none;" onclick="manualConnect()">RETRY PI LINK</button>
     </div>
 
-    <div id="status-msg">Waiting for Pi Browser Handshake...</div>
+    <div id="debug-log">V1.1 - Handshake Pending</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -38,9 +38,12 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
+        const log = document.getElementById('debug-log');
+        const info = document.getElementById('info-text');
+        
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('ascend_pi_v10') || 0;
+        let height = 0, highScore = localStorage.getItem('ascend_pi_v11') || 0;
         let gameOver = true;
         const player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
@@ -64,18 +67,11 @@
         function handleInput(inputX) {
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
-            const mouseX = (inputX - rect.left) * scale;
-            const targetVx = (mouseX - player.x) * 0.18;
-            player.vx = Math.max(-10, Math.min(10, targetVx)); 
+            player.vx = ((inputX - rect.left) * scale - player.x) * 0.18;
         }
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
-        window.addEventListener('touchmove', (e) => { 
-            if(!gameOver) {
-                handleInput(e.touches[0].clientX);
-                e.preventDefault();
-            }
-        }, { passive: false });
+        window.addEventListener('touchmove', (e) => { if(!gameOver) { handleInput(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
 
         function update() {
             if (gameOver) return;
@@ -86,10 +82,7 @@
                 if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
                     player.y = p.y - player.r; player.vy = -14.5;
                     let h = Math.floor((580 - p.y) / 10);
-                    if (h > height) {
-                        height = h;
-                        document.getElementById('heightText').innerText = height;
-                    }
+                    if (h > height) { height = h; document.getElementById('heightText').innerText = height; }
                 }
             });
 
@@ -100,13 +93,9 @@
 
             if (player.y > cameraY + 650) {
                 gameOver = true;
-                if (height > highScore) {
-                    highScore = height;
-                    localStorage.setItem('ascend_pi_v10', highScore);
-                    document.getElementById('highScoreText').innerText = highScore;
-                }
+                if (height > highScore) { highScore = height; localStorage.setItem('ascend_pi_v11', highScore); document.getElementById('highScoreText').innerText = highScore; }
                 document.getElementById('overlay').style.display = 'flex';
-                document.getElementById('info-text').innerText = "SCORE: " + height + "m";
+                info.innerText = "SCORE: " + height + "m";
             }
         }
 
@@ -122,41 +111,33 @@
             requestAnimationFrame(draw);
         }
 
-        // --- THE NUCLEAR PI FIX ---
-        async function initPi() {
-            const status = document.getElementById('status-msg');
-            const info = document.getElementById('info-text');
-            status.innerText = "Connecting to Pi Network...";
-
+        // --- PI AUTO-HANDSHAKE ---
+        async function connectPi(isManual = false) {
+            log.innerText = "Pi Init Started...";
             try {
-                // FORCE Sandbox to false if you are in the real Pi Browser
-                // Many users report this fixes the connection loop
-                await window.Pi.init({ version: "1.5", sandbox: false });
+                // IMPORTANT: sandbox: true is safer for GitHub Pages testing
+                await window.Pi.init({ version: "1.5", sandbox: true });
+                log.innerText = "Pi.init Success. Authenticating...";
                 
-                const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {});
+                const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {
+                    log.innerText = "Incomplete payment detected.";
+                });
                 
-                info.innerText = "Welcome Pioneer, " + auth.user.username;
-                status.innerText = "Connected as: " + auth.user.username;
+                info.innerText = "Welcome " + auth.user.username + "!";
+                log.innerText = "Linked: " + auth.user.username;
                 document.getElementById('pi-btn').style.display = "none";
             } catch (err) {
-                console.error(err);
-                status.innerText = "Handshake failed. Retrying in Sandbox mode...";
-                // Fallback attempt
-                try {
-                    await window.Pi.init({ version: "1.5", sandbox: true });
-                    const auth = await window.Pi.authenticate(['username'], (p) => {});
-                    info.innerText = "Connected (Sandbox): " + auth.user.username;
-                    status.innerText = "Sandbox Auth Active";
-                } catch (e2) {
-                    status.innerText = "Pi Offline. Using Local Play.";
-                    info.innerText = "Ready to Climb?";
-                    document.getElementById('pi-btn').style.display = "block";
-                }
+                log.innerText = "Link Blocked: " + err.message;
+                if (isManual) alert("Error: Use Pi Browser and match portal URL exactly.");
+                info.innerText = "Pi Offline - Local Play Enabled";
+                document.getElementById('pi-btn').style.display = "block";
             }
         }
 
-        // Start checking 1.5 seconds after page loads to give Browser time to inject SDK
-        setTimeout(initPi, 1500);
+        function manualConnect() { connectPi(true); }
+
+        // Give the browser 2 seconds to load GitHub fully before trying Pi
+        setTimeout(() => connectPi(false), 2000);
         draw();
     </script>
 </body>

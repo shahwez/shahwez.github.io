@@ -11,7 +11,7 @@
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
+        .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
         #pi-status { position: absolute; bottom: 20px; font-size: 11px; color: #ffcc00; font-weight: bold; text-align: center; width: 100%; }
     </style>
 </head>
@@ -19,12 +19,12 @@
 
     <div id="overlay">
         <h1 style="color: #ff4400; letter-spacing: 2px;">LAVA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Syncing with Pi Network...</p>
-        <button id="start-btn" class="gold-btn" style="display:none;" onclick="startGame()">START ASCENT</button>
-        <button id="retry-btn" class="gold-btn" style="background:#444; color:#fff; display:none;" onclick="attemptPiLogin()">FORCE SYNC</button>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Login with Pi to Climb</p>
+        <!-- This button now handles both Login and Game Start -->
+        <button id="main-btn" class="gold-btn" onclick="handleStartButtonClick()">START ASCENT</button>
     </div>
 
-    <div id="pi-status">PI ENGINE: INITIALIZING...</div>
+    <div id="pi-status">PI NETWORK: READY</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -41,6 +41,7 @@
         let height = 0, gameOver = true, musicStarted = false;
         let player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0, lavaHeight = 0, lavaSpeed = 0.25, lavaActive = false, waveTime = 0, freezeTimer = 0;
+        let currentUser = null;
 
         function resetLevel() {
             height = 0; cameraY = 0; lavaHeight = 0; lavaActive = false; waveTime = 0; freezeTimer = 0;
@@ -49,7 +50,34 @@
             for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 280, y: 380 - i * 140, w: 100, h: 18, gem: Math.random() < 0.15 });
         }
 
-        function startGame() {
+        // Logic for the Start Button
+        async function handleStartButtonClick() {
+            if (currentUser) {
+                runActualGameStart();
+            } else {
+                status.innerText = "PI NETWORK: AUTHENTICATING...";
+                await attemptPiLogin();
+            }
+        }
+
+        async function attemptPiLogin() {
+            try {
+                const useSandbox = window.location.host.includes("github") || window.location.host.includes("sandbox");
+                await window.Pi.init({ version: "1.5", sandbox: useSandbox });
+                const auth = await window.Pi.authenticate(['username'], (p) => {});
+                
+                currentUser = auth.user;
+                status.innerText = "CONNECTED: " + currentUser.username;
+                info.innerText = "Welcome " + currentUser.username + "!";
+                // Automatically start the game after successful login
+                runActualGameStart();
+            } catch (err) {
+                status.innerText = "LOGIN FAILED: " + err.message.toUpperCase();
+                alert("Please ensure you are using the Pi Browser and your URL matches the Developer Portal.");
+            }
+        }
+
+        function runActualGameStart() {
             resetLevel();
             document.getElementById('overlay').style.display = 'none';
             if (!musicStarted) { audio.play().catch(()=>{}); musicStarted = true; }
@@ -81,14 +109,14 @@
                 }
             });
             if (player.y < cameraY + 250) cameraY += (player.y - 250 - cameraY) * 0.1;
-            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: 100, h: 18, gem: Math.random() < 0.15 });
+            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: Math.max(80, 130 - (height / 10)), h: 18, gem: Math.random() < 0.15 });
             
             let playerScreenY = player.y - cameraY;
             let waveY = (600 - lavaHeight) + Math.sin(player.x * 0.04 + waveTime) * 12;
             if (player.y > cameraY + 680 || (lavaActive && lavaHeight > 5 && playerScreenY + player.r > waveY)) {
                 gameOver = true;
                 document.getElementById('overlay').style.display = 'flex';
-                info.innerText = "ASCENT FAILED: " + height + "m";
+                info.innerText = "SCORE: " + height + "m";
             }
         }
 
@@ -99,7 +127,8 @@
                 ctx.fillStyle = '#d4af37'; ctx.fillRect(p.x, p.y, p.w, p.h);
                 if (p.gem) { ctx.fillStyle = '#00f2ff'; ctx.beginPath(); ctx.moveTo(p.x + p.w/2, p.y - 15); ctx.lineTo(p.x + p.w/2 + 8, p.y - 7); ctx.lineTo(p.x + p.w/2, p.y + 1); ctx.lineTo(p.x + p.w/2 - 8, p.y - 7); ctx.fill(); }
             });
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = (freezeTimer > 0 ? '#00f2ff' : '#fff');
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
             if (lavaHeight > 1) {
                 let baseY = 600 - lavaHeight;
@@ -111,39 +140,7 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- PRODUCTION AUTH FIX ---
-        async function attemptPiLogin() {
-            status.innerText = "STATUS: VERIFYING PROTOCOL...";
-            document.getElementById('retry-btn').style.display = "none";
-            
-            try {
-                // We use sandbox: true to allow the slash mismatch on GitHub domains
-                await window.Pi.init({ version: "1.5", sandbox: true });
-                
-                const auth = await window.Pi.authenticate(['username'], (p) => {});
-                
-                status.innerText = "CONNECTED: " + auth.user.username;
-                info.innerText = "Welcome back, " + auth.user.username;
-                document.getElementById('start-btn').style.display = "block";
-            } catch (err) {
-                // If it fails, try sandbox: false as a last resort
-                try {
-                    await window.Pi.init({ version: "1.5", sandbox: false });
-                    const auth = await window.Pi.authenticate(['username'], (p) => {});
-                    status.innerText = "CONNECTED: " + auth.user.username;
-                    document.getElementById('start-btn').style.display = "block";
-                } catch (err2) {
-                    status.innerText = "SYNC FAILED: TRY TYPING URL WITHOUT SLASH";
-                    info.innerText = "Please type: https://github.io (no slash at end)";
-                    document.getElementById('retry-btn').style.display = "block";
-                }
-            }
-        }
-
-        window.onload = () => {
-            draw();
-            setTimeout(attemptPiLogin, 1500);
-        };
+        draw();
     </script>
 </body>
 </html>

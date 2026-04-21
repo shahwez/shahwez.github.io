@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent</title>
-    <!-- We removed the Pi SDK temporarily to stop the crashing -->
+    <title>Pyramid Ascent: Lava Edition</title>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
@@ -12,7 +11,7 @@
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.3); }
-        #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; }
+        #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; text-shadow: 2px 2px #000; }
     </style>
 </head>
 <body>
@@ -23,12 +22,12 @@
     </div>
 
     <div id="overlay">
-        <h1 id="title" style="color: #d4af37; letter-spacing: 2px; margin-bottom: 5px;">PYRAMID ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Tap to Start Your Journey</p>
-        <button class="gold-btn" onclick="startGame()">START GAME</button>
+        <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 10px #ff0000;">LAVA ASCENT</h1>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Don't let the heat catch you!</p>
+        <button id="action-btn" class="gold-btn" onclick="startGame()">START CLIMB</button>
     </div>
 
-    <audio id="bgMusic" loop><source src="music.mp3" type="audio/mpeg"></audio>
+    <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -37,122 +36,127 @@
         const audio = document.getElementById('bgMusic');
         const info = document.getElementById('info-text');
         const title = document.getElementById('title');
+        const actionBtn = document.getElementById('action-btn');
         
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('pyramid_high_v1.8') || 0;
-        let gameOver = true;
+        let height = 0, highScore = localStorage.getItem('pyramid_lava_v2') || 0;
+        let gameOver = true, musicStarted = false;
         let player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
+        
+        // Lava variables
+        let lavaY = 650;
+        let lavaSpeed = 0.5; // Increases over time
 
         document.getElementById('bestH').innerText = highScore;
 
-        // --- CORE ENGINE ---
         function resetGame() {
-            height = 0;
-            cameraY = 0;
+            height = 0; cameraY = 0; lavaY = 650; lavaSpeed = 0.6;
             player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
-            platforms = [{ x: 0, y: 580, w: 400, h: 20 }]; // Safe starting floor
-            for (let i = 1; i < 10; i++) {
-                addPlatform(580 - i * 130);
-            }
+            platforms = [{ x: 0, y: 580, w: 400, h: 25 }];
+            for (let i = 1; i < 10; i++) { addPlatform(580 - i * 130); }
             document.getElementById('curH').innerText = "0";
         }
 
         function addPlatform(y) {
-            let w = Math.max(60, 110 - (height / 10));
+            let w = Math.max(60, 115 - (height / 8));
             platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 16 });
         }
 
         function startGame() {
             resetGame();
             document.getElementById('overlay').style.display = 'none';
-            audio.play().catch(() => {});
+            if (!musicStarted) { audio.play().catch(e => {}); musicStarted = true; }
             gameOver = false;
         }
 
-        // --- INPUTS ---
         function move(inputX) {
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
             const mouseX = (inputX - rect.left) * scale;
-            player.vx = (mouseX - player.x) * 0.2;
+            player.vx = (mouseX - player.x) * 0.25;
         }
+
         window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
         window.addEventListener('touchmove', (e) => { 
-            if(!gameOver) { move(e.touches[0].clientX); e.preventDefault(); }
+            if(!gameOver) { move(e.touches.clientX); e.preventDefault(); }
         }, { passive: false });
 
-        // --- UPDATE & DRAW ---
         function update() {
             if (gameOver) return;
 
             player.x += player.vx;
-            player.vy += 0.45; // Gravity
+            player.vy += 0.45;
             player.y += player.vy;
+            if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
-            // Borders
-            if (player.x < 10) player.x = 10;
-            if (player.x > 390) player.x = 390;
+            // Lava Rising
+            lavaY -= lavaSpeed;
+            if (height > 50) lavaSpeed = 0.8;
+            if (height > 150) lavaSpeed = 1.1;
 
-            // Collisions
             platforms.forEach(p => {
                 if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
                     player.y = p.y - player.r;
-                    player.vy = -14.5; // Bounce
-                    
+                    player.vy = -15;
                     let currentAlt = Math.floor((580 - p.y) / 10);
                     if (currentAlt > height) {
                         height = currentAlt;
                         document.getElementById('curH').innerText = height;
                         if (height > highScore) {
                             highScore = height;
-                            localStorage.setItem('pyramid_high_v1.8', highScore);
+                            localStorage.setItem('pyramid_lava_v2', highScore);
                             document.getElementById('bestH').innerText = highScore;
                         }
                     }
                 }
             });
 
-            // Camera follow
             if (player.y < cameraY + 280) cameraY = player.y - 280;
-
-            // Endless generation
-            if (platforms[platforms.length - 1].y > cameraY - 100) {
-                addPlatform(platforms[platforms.length - 1].y - 135);
-            }
-
-            // Lose condition
-            if (player.y > cameraY + 680) {
+            if (platforms[platforms.length - 1].y > cameraY - 100) addPlatform(platforms[platforms.length - 1].y - 135);
+            
+            // Lose conditions: Fall or Lava touch
+            if (player.y > cameraY + 680 || player.y + player.r > lavaY) {
                 gameOver = true;
-                title.innerText = "ASCENT ENDED";
+                title.innerText = player.y + player.r > lavaY ? "BURNED!" : "ASCENT ENDED";
                 info.innerText = "Reached: " + height + "m";
-                document.querySelector('.gold-btn').innerText = "TRY AGAIN";
+                actionBtn.innerText = "TRY AGAIN";
                 document.getElementById('overlay').style.display = 'flex';
             }
         }
 
         function draw() {
             ctx.clearRect(0, 0, 400, 600);
-            ctx.save();
-            ctx.translate(0, -cameraY);
+            ctx.save(); ctx.translate(0, -cameraY);
 
             // Draw Platforms
             ctx.fillStyle = '#d4af37';
             platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
 
-            // Draw Ball
+            // Draw Lava
+            let grad = ctx.createLinearGradient(0, lavaY, 0, lavaY + 300);
+            grad.addColorStop(0, 'rgba(255, 68, 0, 0.8)');
+            grad.addColorStop(0.2, 'rgba(255, 120, 0, 0.6)');
+            grad.addColorStop(1, 'rgba(100, 0, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, lavaY, 400, 800);
+            
+            // Lava Glow Line
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(0, lavaY); ctx.lineTo(400, lavaY); ctx.stroke();
+
+            // Draw Player
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
             ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-
             ctx.restore();
+
             update();
             requestAnimationFrame(draw);
         }
-
-        draw(); // Start loop
+        draw();
     </script>
 </body>
 </html>

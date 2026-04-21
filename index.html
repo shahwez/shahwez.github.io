@@ -3,60 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent</title>
+    <title>Ascend Pyramid</title>
+    <!-- Use the production SDK directly -->
     <script src="https://minepi.com"></script>
-    <script src="https://gstatic.com"></script>
-    <script src="https://gstatic.com"></script>
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
-        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
-        #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; text-shadow: 2px 2px #000; }
-        #debug { position: absolute; bottom: 10px; font-size: 11px; color: #ffcc00; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; pointer-events: none; }
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
+        #pi-status { position: absolute; bottom: 20px; font-size: 11px; color: #ffcc00; font-weight: bold; text-align: center; width: 100%; }
     </style>
 </head>
 <body>
 
-    <div id="score-ui">
-        <div>ALT: <span id="curH">0</span>m</div>
-        <div>BEST: <span id="bestH">0</span>m</div>
-    </div>
-
     <div id="overlay">
-        <h1 style="color: #ff4400;">LAVA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Establishing Pi Secure Link...</p>
-        <button id="start-btn" class="btn" onclick="startGame()">START ASCENT</button>
-        <button id="pi-login-btn" class="btn" style="background:#444; color:#fff; display:none;" onclick="manualPiAuth()">LINK PI ACCOUNT</button>
+        <h1 style="color: #ff4400; letter-spacing: 2px;">ASCEND PYRAMID</h1>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Waiting for Pi Browser...</p>
+        <button id="start-btn" class="gold-btn" style="display:none;" onclick="startGame()">START ASCENT</button>
+        <button id="retry-btn" class="gold-btn" style="background:#444; color:#fff; display:none;" onclick="attemptPiLogin()">RETRY PI LINK</button>
     </div>
 
-    <div id="debug">System: Handshaking...</div>
+    <div id="pi-status">STATUS: INITIALIZING SDK...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        // --- GAME ENGINE (LOCKED V3.2) ---
+        // --- LOCKED GAMEPLAY ENGINE (V3.2) ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
-        const debug = document.getElementById('debug');
         const info = document.getElementById('info-text');
+        const status = document.getElementById('pi-status');
         
         canvas.width = 400; canvas.height = 600;
-        let height = 0, highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
-        let gameOver = true, musicStarted = false;
+        let height = 0, gameOver = true, musicStarted = false;
         let player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0, lavaHeight = 0, lavaSpeed = 0.25, lavaActive = false, waveTime = 0, freezeTimer = 0;
-
-        document.getElementById('bestH').innerText = highScore;
 
         function resetLevel() {
             height = 0; cameraY = 0; lavaHeight = 0; lavaActive = false; waveTime = 0; freezeTimer = 0;
             player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
             platforms = [{ x: 100, y: 380, w: 200, h: 30, gem: false }];
             for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 280, y: 380 - i * 140, w: 100, h: 18, gem: Math.random() < 0.15 });
-            document.getElementById('curH').innerText = "0";
         }
 
         function startGame() {
@@ -67,12 +56,14 @@
             setTimeout(() => { lavaActive = true; }, 3000);
         }
 
-        function handleInput(clientX) {
-            const rect = canvas.getBoundingClientRect();
-            player.vx = ((clientX - rect.left) * (400 / rect.width) - player.x) * 0.12;
-        }
-        window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
-        window.addEventListener('touchmove', (e) => { if(!gameOver) { handleInput(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
+        window.addEventListener('touchmove', (e) => { 
+            if(!gameOver) {
+                const rect = canvas.getBoundingClientRect();
+                const touchX = e.touches[0].clientX - rect.left;
+                player.vx = (touchX * (400 / rect.width) - player.x) * 0.15;
+                e.preventDefault();
+            }
+        }, { passive: false });
 
         function update() {
             if (gameOver) return;
@@ -86,22 +77,18 @@
                     player.y = p.y - player.r; player.vy = -12;
                     if (p.gem) { p.gem = false; freezeTimer = 300; }
                     let currentAlt = Math.floor((380 - p.y) / 10);
-                    if (currentAlt > height) {
-                        height = currentAlt; document.getElementById('curH').innerText = height;
-                        if (height > highScore) { highScore = height; localStorage.setItem('pyramid_gems_v3.2', highScore); document.getElementById('bestH').innerText = highScore; }
-                    }
+                    if (currentAlt > height) height = currentAlt;
                 }
             });
-
             if (player.y < cameraY + 250) cameraY += (player.y - 250 - cameraY) * 0.1;
-            if (platforms[platforms.length - 1].y > cameraY - 150) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: Math.max(80, 130 - (height / 10)), h: 18, gem: Math.random() < 0.15 });
+            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: 100, h: 18, gem: Math.random() < 0.15 });
             
             let playerScreenY = player.y - cameraY;
             let waveY = (600 - lavaHeight) + Math.sin(player.x * 0.04 + waveTime) * 12;
             if (player.y > cameraY + 680 || (lavaActive && lavaHeight > 5 && playerScreenY + player.r > waveY)) {
                 gameOver = true;
                 document.getElementById('overlay').style.display = 'flex';
-                info.innerText = "Altitude: " + height + "m";
+                info.innerText = "ASCENT FAILED: " + height + "m";
             }
         }
 
@@ -120,33 +107,43 @@
                 ctx.beginPath(); ctx.moveTo(0, 600);
                 for (let x = 0; x <= 400; x += 5) ctx.lineTo(x, baseY + Math.sin(x * 0.04 + waveTime) * 15);
                 ctx.lineTo(400, 600); ctx.closePath();
-                let grad = ctx.createLinearGradient(0, baseY - 20, 0, 600);
-                if (freezeTimer > 0) { grad.addColorStop(0, '#00f2ff'); grad.addColorStop(1, '#001122'); }
-                else { grad.addColorStop(0, '#ffff00'); grad.addColorStop(0.4, '#aa0000'); grad.addColorStop(1, '#330000'); }
-                ctx.fillStyle = grad; ctx.fill();
+                ctx.fillStyle = freezeTimer > 0 ? '#004466' : '#ff4400'; ctx.fill();
             }
             update(); requestAnimationFrame(draw);
         }
 
-        // --- PI AUTO-LINK ---
-        async function manualPiAuth() {
+        // --- PI NETWORK PRODUCTION AUTH ---
+        async function attemptPiLogin() {
+            status.innerText = "STATUS: CONNECTING...";
+            document.getElementById('retry-btn').style.display = "none";
+            
             try {
-                // Determine if we should use sandbox based on URL
-                const isSandbox = window.location.href.includes('sandbox');
-                await window.Pi.init({ version: "1.5", sandbox: isSandbox });
-                const auth = await window.Pi.authenticate(['username'], (p) => {});
-                debug.innerText = "Connected: " + auth.user.username;
-                info.innerText = "Welcome, " + auth.user.username;
-                document.getElementById('pi-login-btn').style.display = "none";
-            } catch (e) {
-                debug.innerText = "Link Denied: URL Mismatch";
-                document.getElementById('pi-login-btn').style.display = "block";
+                if (!window.Pi) {
+                    status.innerText = "STATUS: SDK MISSING (REFRESH BROWSER)";
+                    document.getElementById('retry-btn').style.display = "block";
+                    return;
+                }
+
+                // sandbox: false tells the SDK to look for a real Pi session
+                await window.Pi.init({ version: "1.5", sandbox: false });
+                
+                const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {});
+                
+                status.innerText = "STATUS: CONNECTED AS " + auth.user.username;
+                info.innerText = "Welcome back, " + auth.user.username;
+                document.getElementById('start-btn').style.display = "block";
+            } catch (err) {
+                console.error(err);
+                status.innerText = "STATUS: LINK ERROR (CHECK DEVELOP.PI)";
+                document.getElementById('retry-btn').style.display = "block";
             }
         }
 
-        // Delay to allow Pi Browser to inject
-        setTimeout(manualPiAuth, 2000);
-        draw();
+        // Auto-run on load
+        window.onload = () => {
+            draw();
+            setTimeout(attemptPiLogin, 1000);
+        };
     </script>
 </body>
 </html>

@@ -3,15 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent: Frost Gems</title>
+    <title>Pyramid Ascent: Locked Gameplay</title>
+    <!-- PI NETWORK SDK -->
+    <script src="https://minepi.com"></script>
+    <!-- FIREBASE SDKs -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
-        body { margin: 0; background: #000; color: #d4af37; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
-        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
-        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(255,68,0,0.4); }
-        #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; text-shadow: 2px 2px #000; }
+        body { 
+            margin: 0; 
+            background: #000; 
+            color: #d4af37; 
+            font-family: 'Segoe UI', sans-serif; 
+            overflow: hidden; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            touch-action: none; 
+        }
+        canvas { 
+            background: #111; 
+            border: 2px solid #d4af37; 
+            border-radius: 8px; 
+            width: 100vw; 
+            height: 100vh; 
+            max-width: 400px; 
+            max-height: 600px; 
+            display: block; 
+        }
+        #overlay { 
+            position: absolute; 
+            inset: 0; 
+            background: rgba(0,0,0,0.9); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 100; 
+            text-align: center; 
+        }
+        .gold-btn { 
+            background: #d4af37; 
+            color: #000; 
+            padding: 18px 45px; 
+            font-weight: bold; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+            font-size: 20px; 
+            box-shadow: 0 4px 15px rgba(255,68,0,0.4); 
+            margin: 10px;
+        }
+        #score-ui { 
+            position: absolute; 
+            top: 15px; 
+            width: 350px; 
+            display: flex; 
+            justify-content: space-between; 
+            font-weight: bold; 
+            font-size: 18px; 
+            pointer-events: none; 
+            z-index: 50; 
+            text-shadow: 2px 2px #000; 
+        }
+        #pi-user { 
+            position: absolute; 
+            bottom: 10px; 
+            font-size: 12px; 
+            opacity: 0.5; 
+        }
     </style>
 </head>
 <body>
@@ -25,56 +87,87 @@
         <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">LAVA ASCENT</h1>
         <p id="info-text" style="color: #fff; margin-bottom: 30px;">Collect Blue Gems to freeze lava!</p>
         <button id="action-btn" class="gold-btn" onclick="startGame()">START CLIMB</button>
+        <button id="pay-revive-btn" class="gold-btn" style="display:none; background:#00f2ff;" onclick="requestPiPayment()">REVIVE (0.01 PI)</button>
     </div>
+
+    <div id="pi-user">Initializing Pi SDK...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
+        // --- CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDeaQF-003Hu6EAK4S0hEQyBs77en-YTIU",
+            authDomain: "://firebaseapp.com",
+            projectId: "pi-ramid-ascent",
+            storageBucket: "pi-ramid-ascent.firebasestorage.app",
+            appId: "1:889789419959:web:7ff463fca36c02032e9832"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
         const info = document.getElementById('info-text');
         const title = document.getElementById('title');
         
-        canvas.width = 400; canvas.height = 600;
+        canvas.width = 400; 
+        canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
-        let gameOver = true, musicStarted = false;
+        let height = 0;
+        let highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
+        let gameOver = true;
+        let musicStarted = false;
         let player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
-        let platforms = [], cameraY = 0;
+        let platforms = [];
+        let cameraY = 0;
         
         let lavaHeight = 0; 
         let lavaSpeed = 0.25; 
         let lavaActive = false;
         let waveTime = 0;
-
-        // Power-up state
         let freezeTimer = 0;
 
         document.getElementById('bestH').innerText = highScore;
 
+        // --- GAMEPLAY FUNCTIONS ---
         function resetGame() {
-            height = 0; cameraY = 0; 
-            lavaHeight = 0; lavaActive = false;
-            waveTime = 0; freezeTimer = 0;
+            height = 0; 
+            cameraY = 0; 
+            lavaHeight = 0; 
+            lavaActive = false;
+            waveTime = 0; 
+            freezeTimer = 0;
             player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
             platforms = [{ x: 100, y: 380, w: 200, h: 30, gem: false }];
-            for (let i = 1; i < 10; i++) { addPlatform(380 - i * 140); }
+            for (let i = 1; i < 10; i++) {
+                addPlatform(380 - i * 140);
+            }
             document.getElementById('curH').innerText = "0";
+            document.getElementById('pay-revive-btn').style.display = "none";
         }
 
         function addPlatform(y) {
             let w = Math.max(80, 130 - (height / 10));
-            // 15% chance for a Frost Gem
             let hasGem = Math.random() < 0.15;
-            platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 18, gem: hasGem });
+            platforms.push({ 
+                x: Math.random() * (400 - w), 
+                y: y, 
+                w: w, 
+                h: 18, 
+                gem: hasGem 
+            });
         }
 
         function startGame() {
             resetGame();
             document.getElementById('overlay').style.display = 'none';
-            if (!musicStarted) { audio.play().catch(e => {}); musicStarted = true; }
+            if (!musicStarted) { 
+                audio.play().catch(e => {}); 
+                musicStarted = true; 
+            }
             gameOver = false;
             setTimeout(() => { lavaActive = true; }, 3000);
         }
@@ -88,7 +181,10 @@
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
         window.addEventListener('touchmove', (e) => { 
-            if(!gameOver) { move(e.touches.clientX); e.preventDefault(); }
+            if(!gameOver) { 
+                move(e.touches[0].clientX); 
+                e.preventDefault(); 
+            }
         }, { passive: false });
 
         function update() {
@@ -98,9 +194,9 @@
             player.vy += 0.35; 
             player.y += player.vy;
             
-            if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
+            if (player.x < 10) player.x = 10; 
+            if (player.x > 390) player.x = 390;
 
-            // Handle Freezing Powerup
             if (freezeTimer > 0) {
                 freezeTimer--;
             } else if (lavaActive) {
@@ -114,10 +210,9 @@
                     player.y = p.y - player.r;
                     player.vy = -12;
                     
-                    // Activate Gem
                     if (p.gem) {
-                        p.gem = false; // Collect it
-                        freezeTimer = 300; // 5 seconds at 60fps
+                        p.gem = false;
+                        freezeTimer = 300;
                     }
 
                     let currentAlt = Math.floor((380 - p.y) / 10);
@@ -140,18 +235,13 @@
             let currentLavaY = 600 - lavaHeight;
             let waveYAtPlayer = currentLavaY + Math.sin(player.x * 0.04 + waveTime) * 12;
 
-            if (player.y > cameraY + 680) {
-                endGame("FALLEN!");
-            } else if (lavaActive && lavaHeight > 5 && playerScreenY + player.r > waveYAtPlayer) {
-                endGame("BURNED!");
+            if (player.y > cameraY + 680 || (lavaActive && lavaHeight > 5 && playerScreenY + player.r > waveYAtPlayer)) {
+                gameOver = true;
+                title.innerText = player.y > cameraY + 650 ? "FALLEN!" : "BURNED!";
+                info.innerText = "Altitude: " + height + "m";
+                document.getElementById('overlay').style.display = 'flex';
+                document.getElementById('pay-revive-btn').style.display = "block";
             }
-        }
-
-        function endGame(reason) {
-            gameOver = true;
-            title.innerText = reason;
-            info.innerText = "Altitude: " + height + "m";
-            document.getElementById('overlay').style.display = 'flex';
         }
 
         function draw() {
@@ -161,11 +251,9 @@
             ctx.save(); 
             ctx.translate(0, -cameraY);
 
-            // Platforms
             platforms.forEach(p => {
                 ctx.fillStyle = '#d4af37';
                 ctx.fillRect(p.x, p.y, p.w, p.h);
-                // Draw Gem
                 if (p.gem) {
                     ctx.fillStyle = '#00f2ff';
                     ctx.beginPath();
@@ -174,49 +262,62 @@
                     ctx.lineTo(p.x + p.w/2, p.y + 1);
                     ctx.lineTo(p.x + p.w/2 - 8, p.y - 7);
                     ctx.fill();
-                    ctx.shadowBlur = 10; ctx.shadowColor = '#00f2ff';
                 }
             });
 
-            // Player
             ctx.fillStyle = '#fff';
-            ctx.shadowBlur = 15; ctx.shadowColor = (freezeTimer > 0 ? '#00f2ff' : '#fff');
-            ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 15; 
+            ctx.shadowColor = (freezeTimer > 0 ? '#00f2ff' : '#fff');
+            ctx.beginPath(); 
+            ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); 
+            ctx.fill();
             ctx.shadowBlur = 0;
             ctx.restore();
 
-            // Draw Lava
             if (lavaHeight > 1) {
                 let baseY = 600 - lavaHeight;
                 ctx.beginPath();
                 ctx.moveTo(0, 600);
                 for (let x = 0; x <= 400; x += 5) {
-                    let y = baseY + Math.sin(x * 0.04 + waveTime) * 15;
-                    ctx.lineTo(x, y);
+                    ctx.lineTo(x, baseY + Math.sin(x * 0.04 + waveTime) * 15);
                 }
                 ctx.lineTo(400, 600);
                 ctx.closePath();
                 
                 let grad = ctx.createLinearGradient(0, baseY - 20, 0, 600);
                 if (freezeTimer > 0) {
-                    grad.addColorStop(0, '#00f2ff'); grad.addColorStop(0.3, '#004466'); grad.addColorStop(1, '#001122');
+                    grad.addColorStop(0, '#00f2ff'); 
+                    grad.addColorStop(0.3, '#004466'); 
+                    grad.addColorStop(1, '#001122');
                 } else {
-                    grad.addColorStop(0, '#ffff00'); grad.addColorStop(0.1, '#ff6600'); grad.addColorStop(0.4, '#aa0000'); grad.addColorStop(1, '#330000'); 
+                    grad.addColorStop(0, '#ffff00'); 
+                    grad.addColorStop(0.1, '#ff6600'); 
+                    grad.addColorStop(0.4, '#aa0000'); 
+                    grad.addColorStop(1, '#330000'); 
                 }
                 ctx.fillStyle = grad;
                 ctx.fill();
             }
 
-            // Freeze Screen Border
-            if (freezeTimer > 0) {
-                ctx.strokeStyle = `rgba(0, 242, 255, ${freezeTimer/600})`;
-                ctx.lineWidth = 10;
-                ctx.strokeRect(0,0,400,600);
-            }
-
             update();
             requestAnimationFrame(draw);
         }
+
+        // --- PI SDK INIT ---
+        async function initPi() {
+            try {
+                const Pi = window.Pi;
+                await Pi.init({ version: "1.5", sandbox: true });
+                const auth = await Pi.authenticate(['username', 'payments'], onIncompletePayment);
+                document.getElementById('pi-user').innerText = "Pioneer: " + auth.user.username;
+            } catch (e) {
+                document.getElementById('pi-user').innerText = "Guest Mode";
+            }
+        }
+        function onIncompletePayment(payment) {}
+        function requestPiPayment() { alert("Pi Payment Integration in progress..."); }
+
+        initPi();
         draw();
     </script>
 </body>

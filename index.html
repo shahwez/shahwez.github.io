@@ -4,21 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
-    
-    <!-- LOAD SDK AT THE VERY TOP -->
     <script src="https://minepi.com"></script>
-    
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
-    
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
-        #pi-login-btn { background: #555; color: #fff; font-size: 14px; padding: 12px 25px; display: block; }
         #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; text-shadow: 2px 2px #000; }
-        #debug { position: absolute; bottom: 10px; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 5px; width: 100%; text-align: center; pointer-events: none; }
+        #debug { position: absolute; bottom: 10px; font-size: 11px; color: #ffcc00; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -30,12 +25,12 @@
 
     <div id="overlay">
         <h1 style="color: #ff4400;">LAVA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Collect Blue Gems to freeze lava!</p>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Establishing Pi Secure Link...</p>
         <button id="start-btn" class="btn" onclick="startGame()">START ASCENT</button>
-        <button id="pi-login-btn" class="btn" onclick="manualPiAuth()">LINK PI ACCOUNT</button>
+        <button id="pi-login-btn" class="btn" style="background:#444; color:#fff; display:none;" onclick="manualPiAuth()">LINK PI ACCOUNT</button>
     </div>
 
-    <div id="debug">System: Waiting for Pi...</div>
+    <div id="debug">System: Handshaking...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -72,12 +67,12 @@
             setTimeout(() => { lavaActive = true; }, 3000);
         }
 
-        function move(clientX) {
+        function handleInput(clientX) {
             const rect = canvas.getBoundingClientRect();
             player.vx = ((clientX - rect.left) * (400 / rect.width) - player.x) * 0.12;
         }
-        window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
-        window.addEventListener('touchmove', (e) => { if(!gameOver) { move(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
+        window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
+        window.addEventListener('touchmove', (e) => { if(!gameOver) { handleInput(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
 
         function update() {
             if (gameOver) return;
@@ -106,6 +101,7 @@
             if (player.y > cameraY + 680 || (lavaActive && lavaHeight > 5 && playerScreenY + player.r > waveY)) {
                 gameOver = true;
                 document.getElementById('overlay').style.display = 'flex';
+                info.innerText = "Altitude: " + height + "m";
             }
         }
 
@@ -132,44 +128,24 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- THE MASTER PI HANDSHAKE FIX ---
+        // --- PI AUTO-LINK ---
         async function manualPiAuth() {
-            debug.innerText = "Checking Global SDK...";
             try {
-                // FORCE check if window.Pi was renamed by browser injection
-                const PiSDK = window.Pi || (window.parent ? window.parent.Pi : null);
-                
-                if (!PiSDK) {
-                    debug.innerText = "Error: SDK still missing. Refreshing Iframe...";
-                    return;
-                }
-
-                debug.innerText = "SDK Detected! Connecting...";
-                await PiSDK.init({ version: "1.5", sandbox: true });
-                const auth = await PiSDK.authenticate(['username'], (p) => {});
-                
-                debug.innerText = "Success: " + auth.user.username;
+                // Determine if we should use sandbox based on URL
+                const isSandbox = window.location.href.includes('sandbox');
+                await window.Pi.init({ version: "1.5", sandbox: isSandbox });
+                const auth = await window.Pi.authenticate(['username'], (p) => {});
+                debug.innerText = "Connected: " + auth.user.username;
                 info.innerText = "Welcome, " + auth.user.username;
                 document.getElementById('pi-login-btn').style.display = "none";
             } catch (e) {
-                debug.innerText = "Handshake Failed. URL Match Error.";
+                debug.innerText = "Link Denied: URL Mismatch";
+                document.getElementById('pi-login-btn').style.display = "block";
             }
         }
 
-        // Auto-detect loop
-        let attempts = 0;
-        const detector = setInterval(() => {
-            attempts++;
-            if (window.Pi) {
-                clearInterval(detector);
-                manualPiAuth();
-            }
-            if (attempts > 20) {
-                clearInterval(detector);
-                debug.innerText = "Automatic Link Failed - Use Manual Button";
-            }
-        }, 500);
-
+        // Delay to allow Pi Browser to inject
+        setTimeout(manualPiAuth, 2000);
         draw();
     </script>
 </body>

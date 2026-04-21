@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent: Lava Rising</title>
+    <title>Pyramid Ascent: Safe Start</title>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
@@ -23,7 +23,7 @@
 
     <div id="overlay">
         <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">LAVA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Climb to higher ground!</p>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Jump to escape the heat!</p>
         <button id="action-btn" class="gold-btn" onclick="startGame()">START CLIMB</button>
     </div>
 
@@ -39,14 +39,14 @@
         
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('pyramid_lava_v2.9') || 0;
+        let height = 0, highScore = localStorage.getItem('pyramid_lava_v3.0') || 0;
         let gameOver = true, musicStarted = false;
-        let player = { x: 200, y: 400, r: 12, vy: 0, vx: 0 }; // Start higher at Y=400
+        let player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
         
         let lavaHeight = 0; 
         let lavaSpeed = 0.38;
-        let lavaDelay = 0;
+        let lavaActive = false; // Prevents death until player moves
         let waveTime = 0;
 
         document.getElementById('bestH').innerText = highScore;
@@ -54,19 +54,19 @@
         function resetGame() {
             height = 0; cameraY = 0; 
             lavaHeight = 0; 
-            lavaDelay = 120; // 2 second headstart
+            lavaActive = false;
             waveTime = 0;
-            // Reset player to the middle of the screen
-            player = { x: 200, y: 400, r: 12, vy: 0, vx: 0 };
-            // Start the first platform exactly under the player
-            platforms = [{ x: 100, y: 450, w: 200, h: 30 }];
-            for (let i = 1; i < 10; i++) { addPlatform(450 - i * 135); }
+            // Spawn player safely in the upper half
+            player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
+            // First platform directly under player
+            platforms = [{ x: 100, y: 350, w: 200, h: 30 }];
+            for (let i = 1; i < 10; i++) { addPlatform(350 - i * 135); }
             document.getElementById('curH').innerText = "0";
         }
 
         function addPlatform(y) {
-            let w = Math.max(70, 120 - (height / 10));
-            platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 16 });
+            let w = Math.max(75, 125 - (height / 8));
+            platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 18 });
         }
 
         function startGame() {
@@ -74,13 +74,15 @@
             document.getElementById('overlay').style.display = 'none';
             if (!musicStarted) { audio.play().catch(e => {}); musicStarted = true; }
             gameOver = false;
+            // Activate lava after 2 seconds
+            setTimeout(() => { lavaActive = true; }, 2000);
         }
 
         function move(inputX) {
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
             const mouseX = (inputX - rect.left) * scale;
-            player.vx = (mouseX - player.x) * 0.2;
+            player.vx = (mouseX - player.x) * 0.22;
         }
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
@@ -96,9 +98,7 @@
             player.y += player.vy;
             if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
-            if (lavaDelay > 0) {
-                lavaDelay--;
-            } else {
+            if (lavaActive) {
                 lavaHeight += lavaSpeed;
             }
             
@@ -109,13 +109,13 @@
                     player.y = p.y - player.r;
                     player.vy = -14.5;
                     
-                    let currentAlt = Math.floor((450 - p.y) / 10);
+                    let currentAlt = Math.floor((350 - p.y) / 10);
                     if (currentAlt > height) {
                         height = currentAlt;
                         document.getElementById('curH').innerText = height;
                         if (height > highScore) {
                             highScore = height;
-                            localStorage.setItem('pyramid_lava_v2.9', highScore);
+                            localStorage.setItem('pyramid_lava_v3.0', highScore);
                             document.getElementById('bestH').innerText = highScore;
                         }
                     }
@@ -129,13 +129,19 @@
             let currentLavaY = 600 - lavaHeight;
             let waveYAtPlayer = currentLavaY + Math.sin(player.x * 0.04 + waveTime) * 15;
 
-            // Death conditions
-            if (player.y > cameraY + 650 || (lavaHeight > 5 && playerScreenY + player.r > waveYAtPlayer)) {
-                gameOver = true;
-                title.innerText = (lavaHeight > 5 && playerScreenY + player.r > waveYAtPlayer) ? "BURNED!" : "FALLEN!";
-                info.innerText = "Altitude: " + height + "m";
-                document.getElementById('overlay').style.display = 'flex';
+            // DEATH CONDITIONS: Added safe height check
+            if (player.y > cameraY + 650) {
+                endGame("FALLEN!");
+            } else if (lavaActive && lavaHeight > 10 && playerScreenY + player.r > waveYAtPlayer) {
+                endGame("BURNED!");
             }
+        }
+
+        function endGame(reason) {
+            gameOver = true;
+            title.innerText = reason;
+            info.innerText = "Altitude: " + height + "m";
+            document.getElementById('overlay').style.display = 'flex';
         }
 
         function draw() {
@@ -152,7 +158,7 @@
             ctx.shadowBlur = 0;
             ctx.restore();
 
-            if (lavaHeight > 2) {
+            if (lavaHeight > 1) {
                 let baseY = 600 - lavaHeight;
                 ctx.beginPath();
                 ctx.moveTo(0, 600);

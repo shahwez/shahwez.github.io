@@ -4,29 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
-    <!-- Use specific CDN links for maximum reliability -->
-    <script src="https://minepi.com"></script>
+    <!-- We removed the Pi SDK temporarily to stop the crashing -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
-        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; }
-        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .btn { background: #d4af37; color: #000; padding: 15px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; margin: 8px; }
-        #debug-log { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 8px; pointer-events: none; }
+        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.3); }
+        #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
-        <h1 style="color: #d4af37; letter-spacing: 2px;">PYRAMID ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Safe Load: 100%</p>
-        <button class="btn" onclick="startGame()">START GAME</button>
-        <button id="pi-btn" class="btn" style="background:#444; color:#fff; font-size: 12px;" onclick="forcePiConnect()">SYNC PI ACCOUNT</button>
-        <button class="btn" style="background:none; border: 1px solid #d4af37; color:#d4af37; font-size: 12px;" onclick="showLeaderboard()">VIEW RANKINGS</button>
+    <div id="score-ui">
+        <div>ALT: <span id="curH">0</span>m</div>
+        <div>BEST: <span id="bestH">0</span>m</div>
     </div>
 
-    <div id="debug-log">System: Ready to Ascent</div>
+    <div id="overlay">
+        <h1 id="title" style="color: #d4af37; letter-spacing: 2px; margin-bottom: 5px;">PYRAMID ASCENT</h1>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Tap to Start Your Journey</p>
+        <button class="gold-btn" onclick="startGame()">START GAME</button>
+    </div>
 
     <audio id="bgMusic" loop><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -35,110 +35,124 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
-        const debug = document.getElementById('debug-log');
         const info = document.getElementById('info-text');
+        const title = document.getElementById('title');
         
         canvas.width = 400; canvas.height = 600;
-        let height = 0, gameOver = true, player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 }, platforms = [], cameraY = 0;
 
-        function log(msg) { debug.innerText = "Log: " + msg; }
+        let height = 0, highScore = localStorage.getItem('pyramid_high_v1.8') || 0;
+        let gameOver = true;
+        let player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
+        let platforms = [], cameraY = 0;
 
-        // --- FIREBASE CONFIG ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDeaQF-003Hu6EAK4S0hEQyBs77en-YTIU",
-            authDomain: "://firebaseapp.com",
-            projectId: "pi-ramid-ascent",
-            storageBucket: "pi-ramid-ascent.firebasestorage.app",
-            appId: "1:889789419959:web:7ff463fca36c02032e9832"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        document.getElementById('bestH').innerText = highScore;
 
-        // --- GAME LOGIC ---
+        // --- CORE ENGINE ---
+        function resetGame() {
+            height = 0;
+            cameraY = 0;
+            player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
+            platforms = [{ x: 0, y: 580, w: 400, h: 20 }]; // Safe starting floor
+            for (let i = 1; i < 10; i++) {
+                addPlatform(580 - i * 130);
+            }
+            document.getElementById('curH').innerText = "0";
+        }
+
+        function addPlatform(y) {
+            let w = Math.max(60, 110 - (height / 10));
+            platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 16 });
+        }
+
         function startGame() {
+            resetGame();
             document.getElementById('overlay').style.display = 'none';
             audio.play().catch(() => {});
-            platforms = [{ x: 0, y: 580, w: 400, h: 20 }];
-            for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 300, y: 580 - i * 135, w: 100, h: 15 });
             gameOver = false;
         }
 
-        function handleInput(clientX) {
+        // --- INPUTS ---
+        function move(inputX) {
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
-            player.vx = ((clientX - rect.left) * scale - player.x) * 0.15;
+            const mouseX = (inputX - rect.left) * scale;
+            player.vx = (mouseX - player.x) * 0.2;
         }
-        window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
-        window.addEventListener('touchmove', (e) => { if(!gameOver) { handleInput(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
+        window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
+        window.addEventListener('touchmove', (e) => { 
+            if(!gameOver) { move(e.touches[0].clientX); e.preventDefault(); }
+        }, { passive: false });
 
+        // --- UPDATE & DRAW ---
         function update() {
             if (gameOver) return;
-            player.x += player.vx; player.vy += 0.45; player.y += player.vy;
-            if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
+            player.x += player.vx;
+            player.vy += 0.45; // Gravity
+            player.y += player.vy;
+
+            // Borders
+            if (player.x < 10) player.x = 10;
+            if (player.x > 390) player.x = 390;
+
+            // Collisions
             platforms.forEach(p => {
                 if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
-                    player.y = p.y - player.r; player.vy = -14.5;
-                    let h = Math.floor((580 - p.y) / 10);
-                    if (h > height) height = h;
+                    player.y = p.y - player.r;
+                    player.vy = -14.5; // Bounce
+                    
+                    let currentAlt = Math.floor((580 - p.y) / 10);
+                    if (currentAlt > height) {
+                        height = currentAlt;
+                        document.getElementById('curH').innerText = height;
+                        if (height > highScore) {
+                            highScore = height;
+                            localStorage.setItem('pyramid_high_v1.8', highScore);
+                            document.getElementById('bestH').innerText = highScore;
+                        }
+                    }
                 }
             });
 
-            if (player.y < cameraY + 250) cameraY = player.y - 250;
-            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 300, y: platforms[platforms.length - 1].y - 135, w: 80, h: 15 });
-            if (player.y > cameraY + 650) {
-                gameOver = true; document.getElementById('overlay').style.display = 'flex';
-                info.innerText = "LAST SCORE: " + height + "m";
-                saveToFirebase(height);
+            // Camera follow
+            if (player.y < cameraY + 280) cameraY = player.y - 280;
+
+            // Endless generation
+            if (platforms[platforms.length - 1].y > cameraY - 100) {
+                addPlatform(platforms[platforms.length - 1].y - 135);
             }
-        }
 
-        async function saveToFirebase(s) {
-            if (s < 5) return;
-            try { await db.collection("leaderboard").add({ user: "Pioneer", score: s, date: Date.now() }); } catch(e) {}
-        }
-
-        function showLeaderboard() {
-            log("Fetching Firebase Data...");
-            db.collection("leaderboard").orderBy("score", "desc").limit(5).get().then(snap => {
-                let list = "";
-                snap.forEach(doc => list += doc.data().score + "m ");
-                alert("TOP SCORES: " + list);
-            }).catch(e => alert("Offline Mode"));
+            // Lose condition
+            if (player.y > cameraY + 680) {
+                gameOver = true;
+                title.innerText = "ASCENT ENDED";
+                info.innerText = "Reached: " + height + "m";
+                document.querySelector('.gold-btn').innerText = "TRY AGAIN";
+                document.getElementById('overlay').style.display = 'flex';
+            }
         }
 
         function draw() {
             ctx.clearRect(0, 0, 400, 600);
-            ctx.save(); ctx.translate(0, -cameraY);
+            ctx.save();
+            ctx.translate(0, -cameraY);
+
+            // Draw Platforms
             ctx.fillStyle = '#d4af37';
             platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+
+            // Draw Ball
             ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
             ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
             ctx.restore();
-            update(); requestAnimationFrame(draw);
+            update();
+            requestAnimationFrame(draw);
         }
 
-        // --- THE UNSTOPPABLE PI CONNECT ---
-        async function forcePiConnect() {
-            log("Attempting Pi Auth...");
-            if (!window.Pi) {
-                log("Fatal: Pi SDK failed to load. Please refresh.");
-                return;
-            }
-            try {
-                // If this is blocked, it won't crash the game
-                await window.Pi.init({ version: "1.5", sandbox: true });
-                const auth = await window.Pi.authenticate(['username'], (p) => {});
-                info.innerText = "Welcome, " + auth.user.username;
-                log("Pi Success: " + auth.user.username);
-                document.getElementById('pi-btn').style.display = "none";
-            } catch (err) {
-                log("Pi Handshake Error. Check develop.pi URL settings.");
-                alert("URL Mismatch. Make sure your GitHub link matches the Developer Portal exactly.");
-            }
-        }
-
-        draw();
+        draw(); // Start loop
     </script>
 </body>
 </html>

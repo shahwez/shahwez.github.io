@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
+    <!-- Forced fresh SDK load -->
     <script src="https://minepi.com"></script>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
@@ -12,25 +13,24 @@
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .gold-btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
-        #pi-status { position: absolute; bottom: 20px; font-size: 11px; color: #ffcc00; font-weight: bold; text-align: center; width: 100%; }
+        #pi-status { position: absolute; bottom: 20px; font-size: 11px; color: #ffcc00; font-weight: bold; text-align: center; width: 100%; opacity: 0.8; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
         <h1 style="color: #ff4400; letter-spacing: 2px;">LAVA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Login with Pi to Climb</p>
-        <!-- This button now handles both Login and Game Start -->
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Tap to Enter the Tomb</p>
         <button id="main-btn" class="gold-btn" onclick="handleStartButtonClick()">START ASCENT</button>
     </div>
 
-    <div id="pi-status">PI NETWORK: READY</div>
+    <div id="pi-status">STATUS: STANDBY</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        // --- LOCKED GAMEPLAY ENGINE (V3.2) ---
+        // --- MASTER GAME ENGINE (LOCKED V3.2) ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
@@ -50,30 +50,40 @@
             for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 280, y: 380 - i * 140, w: 100, h: 18, gem: Math.random() < 0.15 });
         }
 
-        // Logic for the Start Button
         async function handleStartButtonClick() {
             if (currentUser) {
                 runActualGameStart();
             } else {
-                status.innerText = "PI NETWORK: AUTHENTICATING...";
+                status.innerText = "PI NETWORK: SYNCING...";
                 await attemptPiLogin();
             }
         }
 
         async function attemptPiLogin() {
             try {
-                const useSandbox = window.location.host.includes("github") || window.location.host.includes("sandbox");
-                await window.Pi.init({ version: "1.5", sandbox: useSandbox });
+                // If opening in Sandbox on PC, we must use sandbox: true
+                // If opening in Pi Browser on Phone, we use sandbox: false
+                const isSandbox = window.location.href.includes('://minepi.com');
+                
+                await window.Pi.init({ version: "1.5", sandbox: isSandbox });
                 const auth = await window.Pi.authenticate(['username'], (p) => {});
                 
                 currentUser = auth.user;
                 status.innerText = "CONNECTED: " + currentUser.username;
-                info.innerText = "Welcome " + currentUser.username + "!";
-                // Automatically start the game after successful login
-                runActualGameStart();
+                info.innerText = "Pioneer Identity Confirmed!";
+                setTimeout(runActualGameStart, 500);
             } catch (err) {
-                status.innerText = "LOGIN FAILED: " + err.message.toUpperCase();
-                alert("Please ensure you are using the Pi Browser and your URL matches the Developer Portal.");
+                // One final try with the opposite sandbox setting
+                try {
+                    await window.Pi.init({ version: "1.5", sandbox: !window.location.href.includes('://minepi.com') });
+                    const auth = await window.Pi.authenticate(['username'], (p) => {});
+                    currentUser = auth.user;
+                    status.innerText = "CONNECTED: " + currentUser.username;
+                    runActualGameStart();
+                } catch(e) {
+                    status.innerText = "AUTH ERROR: REFRESH PI BROWSER";
+                    alert("Pi Link Failed. Try typing your URL WITHOUT the final slash '/' in the Pi Browser.");
+                }
             }
         }
 

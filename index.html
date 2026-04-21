@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
-    <!-- Use specific version of Pi SDK -->
+    <!-- Use specific production SDK link -->
     <script src="https://minepi.com"></script>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
@@ -25,7 +25,7 @@
         <button id="retry-btn" class="gold-btn" style="background:#444; color:#fff; display:none;" onclick="attemptPiLogin()">RETRY PI LINK</button>
     </div>
 
-    <div id="pi-status">PI NETWORK: HANDSHAKING...</div>
+    <div id="pi-status">PI NETWORK: SYNCING...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -39,7 +39,8 @@
         const status = document.getElementById('pi-status');
         
         canvas.width = 400; canvas.height = 600;
-        let height = 0, gameOver = true, musicStarted = false;
+        let height = 0, highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
+        let gameOver = true, musicStarted = false;
         let player = { x: 200, y: 300, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0, lavaHeight = 0, lavaSpeed = 0.25, lavaActive = false, waveTime = 0, freezeTimer = 0;
 
@@ -114,33 +115,31 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- PRODUCTION PI AUTH BYPASS ---
+        // --- THE SLASH-BYPASS AUTH ---
         async function attemptPiLogin() {
-            status.innerText = "STATUS: SYNCING URLS...";
+            status.innerText = "STATUS: VERIFYING LINK...";
             document.getElementById('retry-btn').style.display = "none";
             
             try {
-                // Determine if we are testing or live
-                const isSandbox = window.location.host.includes("github") || window.location.host.includes("sandbox");
+                // If we are on GitHub, we force Sandbox mode to allow the slash mismatch
+                const onGitHub = window.location.host.includes("github.io");
                 
-                await window.Pi.init({ version: "1.5", sandbox: isSandbox });
-                
-                // Fetch the auth session
-                const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {});
+                await window.Pi.init({ version: "1.5", sandbox: onGitHub });
+                const auth = await window.Pi.authenticate(['username'], (p) => {});
                 
                 status.innerText = "CONNECTED: " + auth.user.username;
-                info.innerText = "Welcome back, " + auth.user.username;
+                info.innerText = "Identity Verified: " + auth.user.username;
                 document.getElementById('start-btn').style.display = "block";
             } catch (err) {
-                status.innerText = "AUTH ERROR: MISMATCH DETECTED";
-                info.innerText = "Please ensure your Pi Portal URL is exactly https://shahwez.github.io/";
+                status.innerText = "URL MISMATCH: ADD / IN PORTAL";
+                info.innerText = "Go to develop.pi and add a '/' to your Development URL";
                 document.getElementById('retry-btn').style.display = "block";
             }
         }
 
         window.onload = () => {
             draw();
-            setTimeout(attemptPiLogin, 1200);
+            setTimeout(attemptPiLogin, 1500);
         };
     </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent: Balanced</title>
+    <title>Pyramid Ascent: Wavy Lava</title>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
@@ -18,12 +18,12 @@
 
     <div id="score-ui">
         <div>ALTITUDE: <span id="curH">0</span>m</div>
-        <div>RECORD: <span id="bestH">0</span>m</div>
+        <div>BEST: <span id="bestH">0</span>m</div>
     </div>
 
     <div id="overlay">
-        <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">PYRAMID CLIMB</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Take your time. Don't slip.</p>
+        <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">WAVY MAGMA</h1>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Escape the bubbling heat!</p>
         <button id="action-btn" class="gold-btn" onclick="startGame()">START CLIMB</button>
     </div>
 
@@ -39,20 +39,20 @@
         
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('pyramid_balanced_v2.3') || 0;
+        let height = 0, highScore = localStorage.getItem('pyramid_wavy_v2.5') || 0;
         let gameOver = true, musicStarted = false;
         let player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
         
-        // SLOWER Lava Logic
-        let lavaWorldY = 650; 
-        let lavaBaseSpeed = 0.25; // Much slower starting speed
+        // Wavy Lava Variables
+        let lavaHeight = 0; 
+        let lavaRiseSpeed = 0.32;
+        let waveOffset = 0;
 
         document.getElementById('bestH').innerText = highScore;
 
         function resetGame() {
-            height = 0; cameraY = 0; 
-            lavaWorldY = 680; // Starts further down
+            height = 0; cameraY = 0; lavaHeight = 0; waveOffset = 0;
             player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
             platforms = [{ x: 0, y: 580, w: 400, h: 25 }];
             for (let i = 1; i < 10; i++) { addPlatform(580 - i * 135); }
@@ -60,8 +60,7 @@
         }
 
         function addPlatform(y) {
-            // Wider platforms for longer
-            let w = Math.max(70, 125 - (height / 12));
+            let w = Math.max(70, 120 - (height / 10));
             platforms.push({ x: Math.random() * (400 - w), y: y, w: w, h: 16 });
         }
 
@@ -76,7 +75,7 @@
             const rect = canvas.getBoundingClientRect();
             const scale = 400 / rect.width;
             const mouseX = (inputX - rect.left) * scale;
-            player.vx = (mouseX - player.x) * 0.15; // Smoother tracking
+            player.vx = (mouseX - player.x) * 0.2;
         }
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
@@ -88,19 +87,18 @@
             if (gameOver) return;
 
             player.x += player.vx;
-            player.vy += 0.4; // Slightly lower gravity for "floatier" jumps
+            player.vy += 0.42;
             player.y += player.vy;
-            
             if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
-            // Slower Lava Rise
-            let currentLavaSpeed = lavaBaseSpeed + (height * 0.001); 
-            lavaWorldY -= currentLavaSpeed;
+            // Lava Mechanics
+            lavaHeight += lavaRiseSpeed;
+            waveOffset += 0.05; // Speed of the wave movement
 
             platforms.forEach(p => {
                 if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
                     player.y = p.y - player.r;
-                    player.vy = -14; // Standard jump height
+                    player.vy = -14.5;
                     
                     let currentAlt = Math.floor((580 - p.y) / 10);
                     if (currentAlt > height) {
@@ -108,23 +106,24 @@
                         document.getElementById('curH').innerText = height;
                         if (height > highScore) {
                             highScore = height;
-                            localStorage.setItem('pyramid_balanced_v2.3', highScore);
+                            localStorage.setItem('pyramid_wavy_v2.5', highScore);
                             document.getElementById('bestH').innerText = highScore;
                         }
                     }
                 }
             });
 
-            // Smoother camera following
-            let targetCamY = player.y - 300;
-            if (targetCamY < cameraY) cameraY += (targetCamY - cameraY) * 0.1;
-
-            if (platforms[platforms.length - 1].y > cameraY - 100) addPlatform(platforms[platforms.length - 1].y - 140);
+            if (player.y < cameraY + 280) cameraY = player.y - 280;
+            if (platforms[platforms.length - 1].y > cameraY - 100) addPlatform(platforms[platforms.length - 1].y - 135);
             
-            // Death conditions
-            if (player.y > cameraY + 700 || player.y + player.r > lavaWorldY) {
+            // Wavy Collision Detection
+            let playerScreenY = player.y - cameraY;
+            // We check collision against the highest point of the wave near the player
+            let waveYAtPlayer = (600 - lavaHeight) + Math.sin(player.x * 0.05 + waveOffset) * 10;
+
+            if (player.y > cameraY + 650 || playerScreenY + player.r > waveYAtPlayer) {
                 gameOver = true;
-                title.innerText = player.y + player.r > lavaWorldY ? "TOO HOT!" : "FALLEN";
+                title.innerText = "SANK IN MAGMA!";
                 info.innerText = "Altitude: " + height + "m";
                 document.getElementById('overlay').style.display = 'flex';
             }
@@ -133,33 +132,46 @@
         function draw() {
             ctx.clearRect(0, 0, 400, 600);
             
+            // 1. World objects
             ctx.save(); 
             ctx.translate(0, -cameraY);
-
-            // Platforms
             ctx.fillStyle = '#d4af37';
             platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-
-            // Player
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
             ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-
-            // Lava
-            let lavaGradient = ctx.createLinearGradient(0, lavaWorldY, 0, lavaWorldY + 600);
-            lavaGradient.addColorStop(0, '#ff4400');
-            lavaGradient.addColorStop(0.2, '#ff1100');
-            lavaGradient.addColorStop(1, '#330000');
-            ctx.fillStyle = lavaGradient;
-            ctx.fillRect(0, lavaWorldY, 400, 1000);
-
-            // Lava Surface
-            ctx.strokeStyle = '#ffff00';
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(0, lavaWorldY); ctx.lineTo(400, lavaWorldY); ctx.stroke();
-
             ctx.restore();
+
+            // 2. Wavy Lava Drawing
+            let lavaBaseY = 600 - lavaHeight;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, 600);
+            ctx.lineTo(0, lavaBaseY);
+            
+            // Create the wave shape using Sine waves
+            for (let x = 0; x <= 400; x += 10) {
+                let y = lavaBaseY + Math.sin(x * 0.05 + waveOffset) * 12;
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.lineTo(400, 600);
+            ctx.closePath();
+
+            // Liquid Gradient
+            let lavaGrad = ctx.createLinearGradient(0, lavaBaseY - 20, 0, 600);
+            lavaGrad.addColorStop(0, '#ffcc00'); // Glowing crest
+            lavaGrad.addColorStop(0.1, '#ff4400'); // Top orange
+            lavaGrad.addColorStop(0.4, '#aa0000'); // Deep red
+            lavaGrad.addColorStop(1, '#220000'); // Bottom dark
+            
+            ctx.fillStyle = lavaGrad;
+            ctx.fill();
+
+            // Surface shine
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
 
             update();
             requestAnimationFrame(draw);

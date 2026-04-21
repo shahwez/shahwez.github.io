@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
-    <!-- We load the SDK but the game loop won't wait for it anymore -->
+    <!-- Use specific version of Pi SDK -->
     <script src="https://minepi.com"></script>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
@@ -27,23 +27,23 @@
     <div id="overlay">
         <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">LAVA ASCENT</h1>
         <p id="info-text" style="color: #fff; margin-bottom: 30px;">Collect Blue Gems to freeze lava!</p>
-        <button class="btn" onclick="startGame()">START ASCENT</button>
-        <button id="revive-btn" class="btn" style="display:none; background:#00f2ff;" onclick="payToRevive()">REVIVE (0.01 PI)</button>
+        <button id="start-btn" class="btn" style="display:none;" onclick="startGame()">START ASCENT</button>
     </div>
 
-    <div id="pi-status">Pi Network: Awaiting Handshake...</div>
+    <div id="pi-status">Pi Network: Handshaking...</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        // --- 1. GAME ENGINE (LOCKED V3.2) ---
+        // --- GAME ENGINE (LOCKED V3.2) ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
         const info = document.getElementById('info-text');
         const title = document.getElementById('title');
         const piLog = document.getElementById('pi-status');
+        const startBtn = document.getElementById('start-btn');
         
         canvas.width = 400; canvas.height = 600;
         let height = 0, highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
@@ -59,7 +59,6 @@
             platforms = [{ x: 100, y: 380, w: 200, h: 30, gem: false }];
             for (let i = 1; i < 10; i++) platforms.push({ x: Math.random() * 280, y: 380 - i * 140, w: 100, h: 18, gem: Math.random() < 0.15 });
             document.getElementById('curH').innerText = "0";
-            document.getElementById('revive-btn').style.display = "none";
         }
 
         function startGame() {
@@ -70,13 +69,12 @@
             setTimeout(() => { lavaActive = true; }, 3000);
         }
 
-        // Horizontal Control
-        function move(clientX) {
+        function handleInput(clientX) {
             const rect = canvas.getBoundingClientRect();
             player.vx = ((clientX - rect.left) * (400 / rect.width) - player.x) * 0.12;
         }
-        window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
-        window.addEventListener('touchmove', (e) => { if(!gameOver) { move(e.touches.clientX); e.preventDefault(); } }, { passive: false });
+        window.addEventListener('mousemove', (e) => { if(!gameOver) handleInput(e.clientX); });
+        window.addEventListener('touchmove', (e) => { if(!gameOver) { handleInput(e.touches[0].clientX); e.preventDefault(); } }, { passive: false });
 
         function update() {
             if (gameOver) return;
@@ -98,7 +96,7 @@
             });
 
             if (player.y < cameraY + 250) cameraY += (player.y - 250 - cameraY) * 0.1;
-            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: Math.max(80, 130 - (height / 10)), h: 18, gem: Math.random() < 0.15 });
+            if (platforms[platforms.length - 1].y > cameraY - 150) platforms.push({ x: Math.random() * 280, y: platforms[platforms.length - 1].y - 140, w: Math.max(80, 130 - (height / 10)), h: 18, gem: Math.random() < 0.15 });
             
             let playerScreenY = player.y - cameraY;
             let waveY = (600 - lavaHeight) + Math.sin(player.x * 0.04 + waveTime) * 12;
@@ -107,7 +105,7 @@
                 title.innerText = player.y > cameraY + 650 ? "FALLEN!" : "BURNED!";
                 info.innerText = "Altitude: " + height + "m";
                 document.getElementById('overlay').style.display = 'flex';
-                document.getElementById('revive-btn').style.display = "block";
+                startBtn.innerText = "RETRY ASCENT";
             }
         }
 
@@ -134,26 +132,30 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- 2. PI NETWORK INTEGRATION (NON-BLOCKING) ---
+        // --- PI SDK INITIALIZATION (OPTIMIZED FOR MOBILE) ---
         async function initPi() {
-            piLog.innerText = "Pi Network: Syncing...";
+            piLog.innerText = "Pi Network: Detecting Browser...";
             try {
-                // IMPORTANT: sandbox: true for testing, false for production
+                if (!window.Pi) throw new Error("SDK Not Loaded");
+                
+                // FORCE sandbox: true for testing, false for real launch
                 await window.Pi.init({ version: "1.5", sandbox: true });
-                const auth = await window.Pi.authenticate(['username', 'payments'], (p) => {});
-                piLog.innerText = "Pioneer Linked: " + auth.user.username;
-                info.innerText = "Welcome, " + auth.user.username + "!";
+                
+                const auth = await window.Pi.authenticate(['username'], (p) => {});
+                piLog.innerText = "Connected: " + auth.user.username;
+                info.innerText = "Welcome, " + auth.user.username;
             } catch (e) {
-                piLog.innerText = "Pi Network: Offline (Local Play)";
+                piLog.innerText = "Pi Network: Local Mode Ready";
             }
+            // Always show the start button regardless of Pi status
+            startBtn.style.display = "block";
         }
 
-        function payToRevive() { alert("Connect to Pi Browser for real payments."); }
-
-        // Start draw loop immediately
-        draw();
-        // Wait 2 seconds before attempting Pi Handshake
-        setTimeout(initPi, 2000);
+        // Delay Pi check to let the UI render first
+        window.onload = () => {
+            draw();
+            setTimeout(initPi, 1500);
+        };
     </script>
 </body>
 </html>

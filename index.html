@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pyramid Ascent</title>
-    <!-- Use specific version of Pi SDK -->
     <script src="https://minepi.com"></script>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
@@ -13,6 +12,7 @@
         canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; display: block; }
         #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
         .btn { background: #d4af37; color: #000; padding: 18px 45px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 20px; box-shadow: 0 4px 15px rgba(212,175,55,0.4); margin: 10px; }
+        #pi-login-btn { background: #444; color: #fff; font-size: 14px; padding: 12px 25px; display: none; }
         #score-ui { position: absolute; top: 15px; width: 350px; display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; pointer-events: none; z-index: 50; text-shadow: 2px 2px #000; }
         #pi-status { position: absolute; bottom: 10px; font-size: 11px; opacity: 0.6; width: 100%; text-align: center; }
     </style>
@@ -27,10 +27,12 @@
     <div id="overlay">
         <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">LAVA ASCENT</h1>
         <p id="info-text" style="color: #fff; margin-bottom: 30px;">Collect Blue Gems to freeze lava!</p>
-        <button id="start-btn" class="btn" style="display:none;" onclick="startGame()">START ASCENT</button>
+        <button id="start-btn" class="btn" onclick="startGame()">START ASCENT</button>
+        <!-- NEW LOGIN BUTTON -->
+        <button id="pi-login-btn" class="btn" onclick="initPi()">LINK PI ACCOUNT</button>
     </div>
 
-    <div id="pi-status">Pi Network: Handshaking...</div>
+    <div id="pi-status">Pi Network: Ready</div>
 
     <audio id="bgMusic" loop preload="auto"><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
@@ -44,6 +46,7 @@
         const title = document.getElementById('title');
         const piLog = document.getElementById('pi-status');
         const startBtn = document.getElementById('start-btn');
+        const loginBtn = document.getElementById('pi-login-btn');
         
         canvas.width = 400; canvas.height = 600;
         let height = 0, highScore = localStorage.getItem('pyramid_gems_v3.2') || 0;
@@ -132,29 +135,25 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- PI SDK INITIALIZATION (OPTIMIZED FOR MOBILE) ---
+        // --- PI SDK ---
         async function initPi() {
-            piLog.innerText = "Pi Network: Detecting Browser...";
+            piLog.innerText = "Pi Network: Syncing...";
             try {
-                if (!window.Pi) throw new Error("SDK Not Loaded");
-                
-                // FORCE sandbox: true for testing, false for real launch
+                // IMPORTANT: sandbox: true for testing, false for production
                 await window.Pi.init({ version: "1.5", sandbox: true });
-                
                 const auth = await window.Pi.authenticate(['username'], (p) => {});
-                piLog.innerText = "Connected: " + auth.user.username;
+                piLog.innerText = "Linked: " + auth.user.username;
                 info.innerText = "Welcome, " + auth.user.username;
+                loginBtn.style.display = "none"; // Hide button if login works
             } catch (e) {
-                piLog.innerText = "Pi Network: Local Mode Ready";
+                piLog.innerText = "Pi Connection Required";
+                loginBtn.style.display = "block"; // Show button if automatic login fails
             }
-            // Always show the start button regardless of Pi status
-            startBtn.style.display = "block";
         }
 
-        // Delay Pi check to let the UI render first
         window.onload = () => {
             draw();
-            setTimeout(initPi, 1500);
+            setTimeout(initPi, 1000);
         };
     </script>
 </body>

@@ -3,31 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ascend Pyramid - V1.5</title>
-    <!-- Use the most stable Pi SDK Link -->
+    <title>Pyramid Ascent</title>
+    <!-- We load the SDK but the game won't wait for it anymore -->
     <script src="https://minepi.com"></script>
-    <!-- Firebase SDKs -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
         body { margin: 0; background: #000; color: #d4af37; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; touch-action: none; }
-        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; max-width: 400px; height: 100vh; max-height: 600px; }
-        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
-        .gold-btn { background: #d4af37; color: #000; padding: 15px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; margin: 10px; }
-        #debug-log { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 5px; text-align: left; pointer-events: none; }
+        canvas { background: #111; border: 2px solid #d4af37; border-radius: 8px; width: 100vw; height: 100vh; max-width: 400px; max-height: 600px; }
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .btn { background: #d4af37; color: #000; padding: 15px 40px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; text-transform: uppercase; font-size: 18px; margin: 10px; }
+        #log { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.5); color: #0f0; font-size: 10px; padding: 5px; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1 style="color: #d4af37; letter-spacing: 2px;">PYRAMID ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 20px;">Initializing Ancient Systems...</p>
-        <button class="gold-btn" onclick="startGame()">START GAME</button>
-        <button id="pi-btn" class="gold-btn" style="background:#555; color:#fff; display:none;" onclick="retryPi()">RETRY PI LINK</button>
+        <h1 style="color: #d4af37;">ASCEND PYRAMID</h1>
+        <p id="info" style="color: #fff; margin-bottom: 20px;">Safe Loading Complete</p>
+        <button class="btn" onclick="startGame()">START GAME</button>
+        <button id="piBtn" class="btn" style="display:none; background:#444; color:#fff; font-size:12px;" onclick="tryPi()">CONNECT PI</button>
     </div>
 
-    <div id="debug-log">Log: System Booting...</div>
-
+    <div id="log">System: Ready</div>
     <audio id="bgMusic" loop><source src="music.mp3" type="audio/mpeg"></audio>
     <canvas id="gameCanvas"></canvas>
 
@@ -35,26 +33,13 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const audio = document.getElementById('bgMusic');
-        const debug = document.getElementById('debug-log');
-        const info = document.getElementById('info-text');
         
         canvas.width = 400; canvas.height = 600;
         let height = 0, gameOver = true, player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 }, platforms = [], cameraY = 0;
 
-        function log(msg) { debug.innerText = "Log: " + msg; console.log(msg); }
+        function updateLog(m) { document.getElementById('log').innerText = "Log: " + m; }
 
-        // --- FIREBASE CONFIG ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDeaQF-003Hu6EAK4S0hEQyBs77en-YTIU",
-            authDomain: "://firebaseapp.com",
-            projectId: "pi-ramid-ascent",
-            storageBucket: "pi-ramid-ascent.firebasestorage.app",
-            appId: "1:889789419959:web:7ff463fca36c02032e9832"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
-        // --- GAME LOGIC ---
+        // --- GAME ENGINE ---
         function startGame() {
             document.getElementById('overlay').style.display = 'none';
             audio.play().catch(() => {});
@@ -65,7 +50,8 @@
 
         window.addEventListener('touchmove', (e) => {
             const rect = canvas.getBoundingClientRect();
-            player.vx = ((e.touches[0].clientX - rect.left) * (400/rect.width) - player.x) * 0.2;
+            const touchX = e.touches[0].clientX - rect.left;
+            player.vx = (touchX * (400/rect.width) - player.x) * 0.15;
         }, { passive: false });
 
         function update() {
@@ -82,17 +68,14 @@
             });
 
             if (player.y < cameraY + 250) cameraY = player.y - 250;
-            if (platforms[platforms.length - 1].y > cameraY - 100) platforms.push({ x: Math.random() * 300, y: platforms[platforms.length - 1].y - 135, w: 80, h: 15 });
-            if (player.y > cameraY + 650) {
-                gameOver = true; document.getElementById('overlay').style.display = 'flex';
-                info.innerText = "FINAL ALTITUDE: " + height + "m";
-                saveScore(height);
+            if (platforms[platforms.length - 1].y > cameraY - 100) {
+                platforms.push({ x: Math.random() * 300, y: platforms[platforms.length - 1].y - 135, w: 80, h: 15 });
             }
-        }
-
-        async function saveScore(s) {
-            if (s < 10) return;
-            try { await db.collection("leaderboard").add({ username: "Pioneer", score: s, ts: Date.now() }); } catch(e) {}
+            if (player.y > cameraY + 650) {
+                gameOver = true;
+                document.getElementById('overlay').style.display = 'flex';
+                document.getElementById('info').innerText = "SCORE: " + height + "m";
+            }
         }
 
         function draw() {
@@ -106,42 +89,29 @@
             update(); requestAnimationFrame(draw);
         }
 
-        // --- PI NETWORK HANDSHAKE (WAIT FOR SDK) ---
-        let checkCount = 0;
-        function initPi() {
-            checkCount++;
-            log("Checking for Pi SDK (Attempt " + checkCount + ")...");
-            
-            if (window.Pi) {
-                log("SDK Found! Initializing...");
-                runPiAuth();
-            } else if (checkCount < 20) {
-                setTimeout(initPi, 500); // Check every 0.5s for 10 seconds
-            } else {
-                log("SDK Load Timeout. Play Offline.");
-                info.innerText = "Pi Link Timed Out";
-                document.getElementById('pi-btn').style.display = "block";
+        // --- BACKGROUND PI LOGIC ---
+        async function tryPi() {
+            updateLog("Looking for Pi...");
+            if (!window.Pi) {
+                updateLog("SDK not found. Refresh Pi Browser.");
+                document.getElementById('piBtn').style.display = 'block';
+                return;
             }
-        }
-
-        async function runPiAuth() {
             try {
-                const isSandbox = window.location.host.includes("sandbox") || window.location.host.includes("github");
+                const isSandbox = window.location.host.includes("sandbox");
                 await window.Pi.init({ version: "1.5", sandbox: isSandbox });
-                log("Pi.init OK. Authenticating...");
                 const auth = await window.Pi.authenticate(['username'], (p) => {});
-                log("Auth Success: " + auth.user.username);
-                info.innerText = "Welcome " + auth.user.username + "!";
-                document.getElementById('pi-btn').style.display = "none";
-            } catch (err) {
-                log("Auth Error: " + err.message);
-                document.getElementById('pi-btn').style.display = "block";
+                document.getElementById('info').innerText = "Welcome, " + auth.user.username;
+                document.getElementById('piBtn').style.display = 'none';
+                updateLog("Connected: " + auth.user.username);
+            } catch (e) {
+                updateLog("Connection Fail: " + e.message);
+                document.getElementById('piBtn').style.display = 'block';
             }
         }
 
-        function retryPi() { checkCount = 0; initPi(); }
-
-        initPi();
+        // Run Pi search 2 seconds after game starts to prevent lag
+        setTimeout(tryPi, 2000);
         draw();
     </script>
 </body>

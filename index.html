@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pyramid Ascent: Magma Master</title>
+    <title>Pyramid Ascent: Lava Fix</title>
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
     <style>
@@ -22,8 +22,8 @@
     </div>
 
     <div id="overlay">
-        <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">MAGMA ASCENT</h1>
-        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Escape the rising heat!</p>
+        <h1 id="title" style="color: #ff4400; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 15px #ff0000;">LAVA ASCENT</h1>
+        <p id="info-text" style="color: #fff; margin-bottom: 30px;">Escape the heat!</p>
         <button id="action-btn" class="gold-btn" onclick="startGame()">START CLIMB</button>
     </div>
 
@@ -39,20 +39,22 @@
         
         canvas.width = 400; canvas.height = 600;
 
-        let height = 0, highScore = localStorage.getItem('pyramid_magma_v2.6') || 0;
+        let height = 0, highScore = localStorage.getItem('pyramid_lava_v2.7') || 0;
         let gameOver = true, musicStarted = false;
         let player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
         let platforms = [], cameraY = 0;
         
-        // Lava Variables
-        let lavaLevel = 0; // Starts at 0 height on screen
-        let lavaSpeed = 0.35;
+        // Lava Settings
+        let lavaHeight = 80; // Starts 80 pixels high so it is IMMEDIATELY visible
+        let lavaSpeed = 0.3;
         let waveTime = 0;
 
         document.getElementById('bestH').innerText = highScore;
 
         function resetGame() {
-            height = 0; cameraY = 0; lavaLevel = 20; waveTime = 0;
+            height = 0; cameraY = 0; 
+            lavaHeight = 80; 
+            waveTime = 0;
             player = { x: 200, y: 500, r: 12, vy: 0, vx: 0 };
             platforms = [{ x: 0, y: 580, w: 400, h: 30 }];
             for (let i = 1; i < 10; i++) { addPlatform(580 - i * 135); }
@@ -80,7 +82,7 @@
 
         window.addEventListener('mousemove', (e) => { if(!gameOver) move(e.clientX); });
         window.addEventListener('touchmove', (e) => { 
-            if(!gameOver) { move(e.touches.clientX); e.preventDefault(); }
+            if(!gameOver) { move(e.touches[0].clientX); e.preventDefault(); }
         }, { passive: false });
 
         function update() {
@@ -91,9 +93,9 @@
             player.y += player.vy;
             if (player.x < 10) player.x = 10; if (player.x > 390) player.x = 390;
 
-            // Lava Rise
-            lavaLevel += lavaSpeed;
-            waveTime += 0.04;
+            // Lava Level logic
+            lavaHeight += lavaSpeed;
+            waveTime += 0.05;
 
             platforms.forEach(p => {
                 if (player.vy > 0 && player.y + player.r > p.y && player.y + player.r < p.y + p.h + 12 && player.x > p.x - 5 && player.x < p.x + p.w + 5) {
@@ -105,7 +107,7 @@
                         document.getElementById('curH').innerText = height;
                         if (height > highScore) {
                             highScore = height;
-                            localStorage.setItem('pyramid_magma_v2.6', highScore);
+                            localStorage.setItem('pyramid_lava_v2.7', highScore);
                             document.getElementById('bestH').innerText = highScore;
                         }
                     }
@@ -115,63 +117,51 @@
             if (player.y < cameraY + 280) cameraY = player.y - 280;
             if (platforms[platforms.length - 1].y > cameraY - 100) addPlatform(platforms[platforms.length - 1].y - 135);
             
-            // LAVA COLLISION (Relative to screen)
+            // Collision with Wavy Lava
             let playerScreenY = player.y - cameraY;
-            let currentLavaY = 600 - lavaLevel;
+            let currentLavaY = 600 - lavaHeight;
+            let waveYAtPlayer = currentLavaY + Math.sin(player.x * 0.04 + waveTime) * 15;
 
-            if (player.y > cameraY + 650 || playerScreenY + player.r > currentLavaY + Math.sin(player.x * 0.05 + waveTime) * 10) {
+            if (player.y > cameraY + 650 || playerScreenY + player.r > waveYAtPlayer) {
                 gameOver = true;
-                title.innerText = "SANK!";
+                title.innerText = "BURNED!";
                 info.innerText = "Altitude: " + height + "m";
                 document.getElementById('overlay').style.display = 'flex';
             }
         }
 
         function draw() {
-            // Clear Screen
             ctx.fillStyle = "#111";
             ctx.fillRect(0, 0, 400, 600);
             
-            // 1. Draw World (Camera Adjusted)
             ctx.save(); 
             ctx.translate(0, -cameraY);
-            
-            // Platforms
             ctx.fillStyle = '#d4af37';
             platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-
-            // Player
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
             ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
-            
             ctx.restore();
 
-            // 2. Draw Wavy Lava (Screen Overlay - Always on Top)
-            let baseY = 600 - lavaLevel;
-            
+            // DRAW WAVY LAVA (LAST LAYER)
+            let baseY = 600 - lavaHeight;
             ctx.beginPath();
             ctx.moveTo(0, 600);
             for (let x = 0; x <= 400; x += 5) {
-                let y = baseY + Math.sin(x * 0.03 + waveTime) * 12;
+                let y = baseY + Math.sin(x * 0.04 + waveTime) * 15;
                 ctx.lineTo(x, y);
             }
             ctx.lineTo(400, 600);
             ctx.closePath();
 
             let grad = ctx.createLinearGradient(0, baseY - 20, 0, 600);
-            grad.addColorStop(0, '#ffcc00'); // Glowing Yellow edge
-            grad.addColorStop(0.1, '#ff4400'); // Orange
-            grad.addColorStop(0.5, '#880000'); // Deep Red
-            
+            grad.addColorStop(0, '#ffff00'); 
+            grad.addColorStop(0.1, '#ff6600'); 
+            grad.addColorStop(0.4, '#aa0000'); 
+            grad.addColorStop(1, '#330000'); 
             ctx.fillStyle = grad;
             ctx.fill();
-
-            // Lava Glow Line
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1;
-            ctx.stroke();
 
             update();
             requestAnimationFrame(draw);
